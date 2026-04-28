@@ -95,7 +95,7 @@ def run_outbound_pipeline():
     pending = get_completed_unnotified()
 
     for todo in pending:
-        result = send_completion_notice(todo["sender"], todo["subject"])
+        result = send_completion_notice(todo)
         if result:
             update_status(todo["id"], notified=True)
             print(f"  -> 알림 발송 완료: {todo['sender']} | {todo['subject']}")
