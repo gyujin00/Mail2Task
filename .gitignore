@@ -1,0 +1,19 @@
+# 비밀번호, 환경변수
+.env
+*.env
+
+# 다운로드된 첨부파일
+downloads/
+
+# 태스크 데이터 (로컬 전용)
+todo_list.csv
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,89 @@
+"""
+Task-Harvester: 이메일 기반 지능형 업무 자동 채집 시스템
+파이프라인: 메일 수신 → PDF 추출 → 분류 → CSV 저장 → 완료 알림
+"""
+import config
+from mail_reader import fetch_target_mails
+from pdf_extractor import extract_text_from_pdf
+from classifier import score_urgency, is_duplicate
+from todo_manager import load_todos, save_todo, update_status
+from notifier import send_completion_notice
+
+
+def run_inbound_pipeline():
+    """신규 업무 메일을 수집하여 todo_list.csv에 저장한다."""
+    print("=== [1단계] 메일 수신 시작 ===")
+    mails = fetch_target_mails()
+
+    if not mails:
+        print("새로운 업무 메일 없음.")
+        return
+
+    existing_todos = load_todos()
+
+    for mail_info in mails:
+        subject = mail_info["subject"]
+        sender = mail_info["sender"]
+        body = mail_info["body"]
+        pdf_paths = mail_info["pdf_paths"]
+        received_at = mail_info["received_at"]
+
+        print(f"\n[처리 중] {subject} | {sender}")
+
+        # PDF에서 상세 지침 추출
+        pdf_text = ""
+        for path in pdf_paths:
+            pdf_text += extract_text_from_pdf(path)
+
+        full_text = body + "\n" + pdf_text
+
+        # 중복 감지
+        if is_duplicate(subject, sender, existing_todos):
+            print(f"  -> 중복 감지, 건너뜀: {subject}")
+            continue
+
+        # 긴급도 분류
+        urgency_score, urgency_level, deadline = score_urgency(full_text, received_at)
+
+        task = {
+            "subject": subject,
+            "sender": sender,
+            "deadline": deadline,
+            "task_summary": full_text[:200],  # 승민 홍: LLM 요약으로 교체
+            "task_type": "",                   # kdh: 유형 분류로 교체
+            "urgency_score": urgency_score,
+            "urgency_level": urgency_level,
+            "status": "대기",
+            "received_at": received_at,
+        }
+
+        save_todo(task, existing_todos)
+        print(f"  -> 저장 완료 | 긴급도: {urgency_level}({urgency_score}점) | 마감: {deadline}")
+
+    print("\n=== 수신 파이프라인 완료 ===")
+
+
+def run_outbound_pipeline():
+    """todo_list.csv에서 '완료' 상태 항목을 찾아 발신자에게 완료 알림을 보낸다."""
+    print("=== [2단계] 완료 알림 발송 시작 ===")
+    todos = load_todos()
+
+    for todo in todos:
+        if todo.get("status") == "완료" and not todo.get("notified"):
+            result = send_completion_notice(todo["sender"], todo["subject"])
+            if result:
+                update_status(todo["id"], notified=True)
+                print(f"  -> 알림 발송 완료: {todo['sender']} | {todo['subject']}")
+
+    print("=== 발송 파이프라인 완료 ===")
+
+
+if __name__ == "__main__":
+    if not config.EMAIL or not config.PASSWORD:
+        print("[오류] 환경변수 TASK_EMAIL, TASK_PASSWORD를 설정하세요.")
+        print("  예) set TASK_EMAIL=your@gmail.com")
+        print("  예) set TASK_PASSWORD=앱비밀번호16자리")
+        exit(1)
+
+    run_inbound_pipeline()
+    run_outbound_pipeline()
