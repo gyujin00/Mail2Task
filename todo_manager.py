@@ -1,6 +1,6 @@
 """
 담당: kdh
-역할: todo_list.csv 생성/읽기/업데이트, 업무 유형 분류
+역할: To-do 리스트 파일 생성(기본) / 업무 유형 분류 / 알림 트리거
 """
 import csv
 import hashlib
@@ -60,6 +60,19 @@ def classify_task_type(text):
     """
     # TODO: 키워드 기반으로 유형 분류
     return "기타"
+
+
+def get_completed_unnotified():
+    """
+    상태가 '완료'이고 아직 알림이 발송되지 않은 태스크 목록을 반환한다.
+    (알림 트리거 — notifier.py 연동용)
+
+    반환:
+        list[dict]: notified 컬럼이 없거나 "" / "False"인 완료 태스크
+    """
+    todos = load_todos()
+    # TODO: status == "완료" and notified != "True" 인 항목 필터링하여 반환
+    return []
 
 
 def _make_id(subject, sender):

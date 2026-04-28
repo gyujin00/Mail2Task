@@ -1,6 +1,7 @@
 """
-담당: 승민 홍
+담당: 규진 차
 역할: Gmail IMAP 접속 → [업무협조] 메일 필터링 → PDF 첨부파일 다운로드
+      (핵심 수집 및 추출 기능 - 기본)
 """
 import imaplib
 import email
