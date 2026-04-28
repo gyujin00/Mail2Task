@@ -1,0 +1,11 @@
+# 사용되는 패키지 모두 install하기.
+# cd Mail2Task
+# pip install -r requirements.txt
+#----------------------------------------------------------------
+# Task-Harvester 필수 패키지
+
+# PDF 텍스트 추출 (pdf_extractor.py)
+pdfplumber>=0.10.0
+
+# LLM API 요약 (summarizer.py - 선택 구현)
+# anthropic>=0.18.0
