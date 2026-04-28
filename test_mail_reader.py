@@ -6,9 +6,8 @@
 #      Google 계정 → 보안 → "앱 비밀번호" 검색 → 생성 (16자리 복사)
 #
 #   2. .env 파일 설정
-#      프로젝트 루트의 .env 파일에 아래 값 입력
-#      TASK_EMAIL=본인Gmail@gmail.com
-#      TASK_PASSWORD=앱비밀번호16자리
+#      .env.example 파일을 복사하여 .env 파일 생성 후
+#      TASK_EMAIL과 TASK_PASSWORD에 본인의 Gmail 계정 정보 입력
 #
 #   3. 테스트 메일 발송 (본인에게)
 #      제목: [업무요청] 브랜드 리뉴얼 건 (~05/02)
