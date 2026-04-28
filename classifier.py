@@ -168,10 +168,23 @@ def group_similar_tasks(todos):
     return groups
 
 
+def _normalize_subject(subject):
+    """제목에서 노이즈 제거 후 정규화하여 유사도 비교 정확도를 높인다."""
+    # [말머리] 제거 (예: [업무요청], [기획] 등)
+    text = re.sub(r"^\[.+?\]\s*", "", subject)
+
+    # 날짜 패턴 제거
+    text = re.sub(r"\(~\d{1,2}/\d{1,2}\)", "", text)  # (~04/30) 형식
+    text = re.sub(r"\d{4}[-./]\d{1,2}[-./]\d{1,2}", "", text)  # 2026-05-02 형식
+
+    # 공백 정규화 (여러 공백 → 1개)
+    return " ".join(text.split())
+
+
 def _similarity(left_text, right_text):
-    """공백 기준 단어 집합으로 단순 Jaccard 유사도를 계산한다."""
-    left_words = set(left_text.split())
-    right_words = set(right_text.split())
+    """정규화된 제목의 단어 집합으로 Jaccard 유사도를 계산한다."""
+    left_words = set(_normalize_subject(left_text).split())
+    right_words = set(_normalize_subject(right_text).split())
     if not left_words or not right_words:
         return 0.0
     return len(left_words & right_words) / len(left_words | right_words)
