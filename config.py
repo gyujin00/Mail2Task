@@ -1,4 +1,28 @@
 import os
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def _load_dotenv():
+    """Load simple KEY=VALUE pairs from .env without extra dependencies."""
+    env_path = BASE_DIR / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'").strip('"')
+        os.environ.setdefault(key, value)
+
+
+_load_dotenv()
 
 # Gmail IMAP/SMTP 서버 설정
 IMAP_SERVER = "imap.gmail.com"
@@ -10,8 +34,8 @@ EMAIL = os.environ.get("TASK_EMAIL", "")
 PASSWORD = os.environ.get("TASK_PASSWORD", "")  # Gmail 앱 비밀번호
 
 # 파일 경로
-SAVE_DIR = "./downloads"
-TODO_CSV = "todo_list.csv"
+SAVE_DIR = str(BASE_DIR / "downloads")
+TODO_CSV = str(BASE_DIR / "todo_list.csv")
 
 # CSV 컬럼 정의 (팀 전체 공유 — 변경 시 팀 협의 필요)
 CSV_COLUMNS = [

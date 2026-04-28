@@ -1,6 +1,7 @@
 # 비밀번호, 환경변수
 .env
 *.env
+.venv/
 
 # 다운로드된 첨부파일
 downloads/
