@@ -7,5 +7,8 @@
 # PDF 텍스트 추출 (pdf_extractor.py)
 pdfplumber>=0.10.0
 
+# MongoDB 연동 (todo_manager.py / stats.py)
+pymongo>=4.8.0
+
 # LLM API 요약 (summarizer.py - 선택 구현)
 # anthropic>=0.18.0

@@ -25,7 +25,7 @@ def send_completion_notice(todo):
         bool: 발송 성공 여부
     """
     to_email = todo["sender"]
-    task_subject = todo["subject"]
+    task_subject = todo.get("title") or todo["subject"]
 
     msg = MIMEMultipart()
     msg["From"]    = config.EMAIL
@@ -46,11 +46,12 @@ def send_completion_notice(todo):
 
 def _build_body(todo):
     """완료 알림 메일 본문 생성 (업무 상세 정보 포함)"""
+    task_title = todo.get("title") or todo["subject"]
     body = (
         f"안녕하세요,\n\n"
         f"요청하신 업무가 완료되었습니다.\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"  업무 제목: {todo['subject']}\n"
+        f"  업무 제목: {task_title}\n"
     )
 
     if todo.get("deadline"):
