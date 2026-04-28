@@ -71,7 +71,7 @@ def score_urgency(text, received_at, deadline=""):
         # 구조화된 우선순위가 없을 때만 비정형 키워드로 점수를 보완한다.
         for keyword in URGENT_KEYWORDS:
             if keyword in text:
-                score += 50
+                score += 80  # "즉시", "긴급" 키워드는 가장 강한 시그널 (자연어 강조)
                 break
 
         for keyword in HIGH_KEYWORDS:
