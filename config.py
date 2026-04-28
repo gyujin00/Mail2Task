@@ -19,8 +19,6 @@ def _load_dotenv():
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip("'").strip('"')
-
-        # 셸에서 직접 넣은 값이 있으면 그 값을 우선 사용한다.
         os.environ.setdefault(key, value)
 
 
@@ -35,6 +33,20 @@ SMTP_PORT = 587
 # 계정 정보: .env 또는 환경변수에서 읽는다.
 EMAIL = os.environ.get("TASK_EMAIL", "")
 PASSWORD = os.environ.get("TASK_PASSWORD", "")  # Gmail 앱 비밀번호
+
+# MongoDB 설정
+MONGODB_URI = os.environ.get(
+    "MONGODB_URI",
+    "mongodb://admin:admin1234@localhost:27017/mail2task?authSource=admin",
+)
+MONGODB_DB = os.environ.get("MONGODB_DB", "mail2task")
+MONGODB_MAILS_COLLECTION = os.environ.get("MONGODB_MAILS_COLLECTION", "mails")
+MONGODB_TASKS_COLLECTION = os.environ.get(
+    "MONGODB_TASKS_COLLECTION",
+    os.environ.get("MONGODB_COLLECTION", "tasks"),
+)
+# 기존 코드 호환용 별칭
+MONGODB_COLLECTION = MONGODB_TASKS_COLLECTION
 
 # 파일 경로
 SAVE_DIR = str(BASE_DIR / "downloads")
