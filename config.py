@@ -48,6 +48,10 @@ MONGODB_TASKS_COLLECTION = os.environ.get(
 # 기존 코드 호환용 별칭
 MONGODB_COLLECTION = MONGODB_TASKS_COLLECTION
 
+# OpenAI API 설정
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4-mini")
+
 # 파일 경로
 SAVE_DIR = str(BASE_DIR / "downloads")
 TODO_CSV = str(BASE_DIR / "todo_list.csv")

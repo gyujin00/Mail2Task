@@ -10,5 +10,5 @@ pdfplumber>=0.10.0
 # MongoDB 연동 (todo_manager.py / stats.py)
 pymongo>=4.8.0
 
-# LLM API 요약 (summarizer.py - 선택 구현)
-# anthropic>=0.18.0
+# OpenAI API 요약 (summarizer.py)
+openai>=1.99.0
