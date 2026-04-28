@@ -1,60 +1,94 @@
 """
-담당: 규진 차
-역할: 업무 긴급도 분류 / 중복 업무 감지 / 비슷한 업무끼리 묶기
+업무 분류 보조 모듈.
+
+이 모듈은 아래 역할만 담당한다.
+- 긴급도 점수 계산
+- 중복 업무 판별
+- 제목 기반 유사 업무 묶기
+
+마감일 해석은 deadline_parser.py에서만 수행해
+프로젝트 전체가 하나의 기준을 쓰도록 맞춘다.
 """
+
+from __future__ import annotations
+
 import re
-from datetime import datetime, date
+from datetime import date, datetime
+
 import config
 
 
-# ─────────────────────────────────────────
-# 1. 업무 긴급도 분류
-# ─────────────────────────────────────────
+URGENT_KEYWORDS = [
+    "즉시",
+    "긴급",
+    "오늘",
+    "지금 바로",
+    "ASAP",
+    "asap",
+    "급합니다",
+    "급히",
+]
 
-URGENT_KEYWORDS = ["즉시", "긴급", "오늘", "지금 바로", "ASAP", "asap", "급합니다", "급히"]
-HIGH_KEYWORDS   = ["이번 주", "금요일까지", "주말 전", "내일까지"]
-MID_KEYWORDS    = ["다음 주", "이번 달"]
+HIGH_KEYWORDS = [
+    "이번 주",
+    "금요일까지",
+    "주말 전",
+    "내일까지",
+]
 
-def score_urgency(text, received_at):
+MID_KEYWORDS = [
+    "다음 주",
+    "이번 달",
+]
+
+DEFAULT_PRIORITY_SCORES = {
+    "상": 70,
+    "중": 40,
+    "하": 10,
+    "high": 70,
+    "medium": 40,
+    "low": 10,
+}
+
+
+def score_urgency(text, received_at, deadline=""):
     """
-    메일 본문을 분석하여 긴급도 점수, 등급, 마감일을 반환한다.
+    우선순위 필드, 키워드, 남은 마감일을 기준으로 긴급도를 계산한다.
 
-    인자:
-        text        (str): 메일 본문 + PDF 텍스트
-        received_at (str): 수신 일시 "YYYY-MM-DD HH:MM"
-
-    반환:
-        tuple(int, str, str): (긴급도 점수 0~100, 등급, 마감일 "YYYY-MM-DD")
-        등급: "긴급" | "보통" | "여유"
-        마감일: 파싱 실패 시 ""
+    Returns:
+        tuple[int, str, str]: (점수, 등급, 마감일)
     """
+    # 기존 호출부와의 호환성을 위해 인자는 유지한다.
+    del received_at
+
     score = 0
 
-    # 구조화 필드: '우선순위: 상/중/하' 가 있으면 해당 점수를 기준으로 사용
+    # 메일 양식에 우선순위가 있으면 그 값을 가장 먼저 사용한다.
     priority_score = _parse_priority(text)
     if priority_score is not None:
         score = priority_score
     else:
-        # 비정형 키워드 기반 점수
-        for kw in URGENT_KEYWORDS:
-            if kw in text:
+        # 구조화된 우선순위가 없을 때만 비정형 키워드로 점수를 보완한다.
+        for keyword in URGENT_KEYWORDS:
+            if keyword in text:
                 score += 50
                 break
-        for kw in HIGH_KEYWORDS:
-            if kw in text:
+
+        for keyword in HIGH_KEYWORDS:
+            if keyword in text:
                 score += 30
                 break
-        for kw in MID_KEYWORDS:
-            if kw in text:
+
+        for keyword in MID_KEYWORDS:
+            if keyword in text:
                 score += 10
                 break
 
-    # 마감일 기반 가산점
-    deadline = _parse_deadline(text, received_at)
+    # 마감일은 deadline_parser.py에서 이미 해석된 값을 전달받아 사용한다.
     if deadline:
         try:
-            dl = datetime.strptime(deadline, "%Y-%m-%d").date()
-            days_left = (dl - date.today()).days
+            due_date = datetime.strptime(deadline, "%Y-%m-%d").date()
+            days_left = (due_date - date.today()).days
             if days_left <= 1:
                 score += 30
             elif days_left <= 3:
@@ -71,121 +105,73 @@ def score_urgency(text, received_at):
     elif score >= config.URGENCY_MID:
         level = "보통"
     else:
-        level = "여유"
+        level = "상시"
 
     return score, level, deadline
 
 
 def _parse_priority(text):
     """
-    본문의 '우선순위: 상/중/하' 필드를 파싱하여 점수를 반환한다.
-    필드가 없으면 None 반환.
+    '우선순위: 상' 같은 구조화된 필드를 찾아 점수로 변환한다.
+
+    Returns:
+        int | None
     """
-    m = re.search(r"우선순위\s*[:：]\s*(상|중|하)", text)
-    if m:
-        return config.PRIORITY_SCORE.get(m.group(1))
-    return None
+    match = re.search(
+        r"(?:우선순위|priority)\s*[:：]?\s*(상|중|하|high|medium|low)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
 
+    label = match.group(1)
+    mapping = dict(DEFAULT_PRIORITY_SCORES)
+    config_mapping = getattr(config, "PRIORITY_SCORE", None)
+    if isinstance(config_mapping, dict):
+        mapping.update(config_mapping)
 
-def _parse_deadline(text, received_at):
-    """텍스트에서 마감일을 추출한다. 실패 시 빈 문자열 반환."""
-    # 구조화 필드: "마감기한: 2026-04-30 (목) 15:00"
-    m = re.search(r"마감기한\s*[:：]\s*(\d{4})-(\d{2})-(\d{2})", text)
-    if m:
-        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return mapping.get(label.lower(), mapping.get(label))
 
-    # 제목의 (~MM/DD) 형식
-    m = re.search(r"~(\d{1,2})/(\d{1,2})", text)
-    if m:
-        try:
-            year = datetime.strptime(received_at, "%Y-%m-%d %H:%M").year
-            return f"{year}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
-        except ValueError:
-            pass
-
-    # 일반 "YYYY-MM-DD" 형식
-    m = re.search(r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})", text)
-    if m:
-        return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
-
-    # "MM월 DD일" 형식
-    m = re.search(r"(\d{1,2})월\s*(\d{1,2})일", text)
-    if m:
-        try:
-            year = datetime.strptime(received_at, "%Y-%m-%d %H:%M").year
-            return f"{year}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
-        except ValueError:
-            pass
-
-    return ""
-
-
-# ─────────────────────────────────────────
-# 2. 중복 업무 감지
-# ─────────────────────────────────────────
 
 def is_duplicate(subject, sender, existing_todos):
-    """
-    동일한 subject + sender 조합이 CSV에 이미 존재하는지 확인한다.
-
-    인자:
-        subject        (str): 메일 제목
-        sender         (str): 발신자 이메일
-        existing_todos (list[dict]): load_todos() 반환값
-
-    반환:
-        bool: True면 중복
-    """
+    """같은 제목/발신자 조합이 이미 저장되어 있는지 확인한다."""
     for todo in existing_todos:
         if todo.get("subject") == subject and todo.get("sender") == sender:
             return True
     return False
 
 
-# ─────────────────────────────────────────
-# 3. 비슷한 업무끼리 묶기
-# ─────────────────────────────────────────
-
 def group_similar_tasks(todos):
-    """
-    업무 목록에서 제목이 유사한 태스크를 그룹으로 묶어 반환한다.
-
-    인자:
-        todos (list[dict]): load_todos() 반환값
-
-    반환:
-        list[list[dict]]: 유사한 태스크끼리 묶인 그룹 목록
-                          단독 태스크는 원소가 1개인 리스트로 포함됨
-
-    예시:
-        [
-            [{"subject": "보고서 제출 요청"}, {"subject": "보고서 작성 요청"}],
-            [{"subject": "회의 일정 확인"}],
-        ]
-    """
+    """제목 유사도가 높은 업무끼리 묶어서 반환한다."""
     used = set()
     groups = []
 
-    for i, t1 in enumerate(todos):
-        if i in used:
+    for index, left in enumerate(todos):
+        if index in used:
             continue
-        group = [t1]
-        used.add(i)
-        for j, t2 in enumerate(todos):
-            if j in used:
+
+        group = [left]
+        used.add(index)
+
+        for other_index, right in enumerate(todos):
+            if other_index in used:
                 continue
-            if _similarity(t1["subject"], t2["subject"]) >= 0.5:
-                group.append(t2)
-                used.add(j)
+
+            # 제목 단어 집합이 절반 이상 겹치면 같은 그룹으로 본다.
+            if _similarity(left["subject"], right["subject"]) >= 0.5:
+                group.append(right)
+                used.add(other_index)
+
         groups.append(group)
 
     return groups
 
 
-def _similarity(s1, s2):
-    """두 문자열의 단어 집합 기반 유사도를 반환한다 (Jaccard)."""
-    w1 = set(s1.split())
-    w2 = set(s2.split())
-    if not w1 or not w2:
+def _similarity(left_text, right_text):
+    """공백 기준 단어 집합으로 단순 Jaccard 유사도를 계산한다."""
+    left_words = set(left_text.split())
+    right_words = set(right_text.split())
+    if not left_words or not right_words:
         return 0.0
-    return len(w1 & w2) / len(w1 | w2)
+    return len(left_words & right_words) / len(left_words | right_words)
