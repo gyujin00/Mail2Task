@@ -37,8 +37,8 @@ EMAIL = os.environ.get("TASK_EMAIL", "")
 PASSWORD = os.environ.get("TASK_PASSWORD", "")  # Gmail 앱 비밀번호
 
 # 파일 경로
-SAVE_DIR = "./downloads"
-TODO_CSV = "todo_list.csv"
+SAVE_DIR = str(BASE_DIR / "downloads")
+TODO_CSV = str(BASE_DIR / "todo_list.csv")
 
 # CSV 컬럼 정의
 CSV_COLUMNS = [
