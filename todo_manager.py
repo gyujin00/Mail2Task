@@ -1,315 +1,209 @@
 """
-담당: kdh
-역할: To-do 리스트 관리
+통합 Todo 매니저 (정확도 복구 버전)
+- 저장소: MongoDB (dev)
+- 로직: 사용자 지정 강화 필터 + NER (local)
 """
 
-import csv
+from __future__ import annotations
 import hashlib
 import os
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    pipeline
-)
+import re
+from datetime import datetime
+from pymongo import DESCENDING, MongoClient
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+
 import config
 
-
-# -----------------------------
-# 1. Lazy Loading (모델)
-# -----------------------------
+# ---------------------------------------------------------
+# 1. AI 모델 & NER 로직 (Lazy Loading)
+# ---------------------------------------------------------
 _tokenizer = None
 _model = None
 _ner_pipeline = None
 
-
-def _load_model():
-    global _tokenizer, _model
-
-    if _tokenizer is None:
-        if os.path.exists("./todo_model"):
-            path = "./todo_model"
-            print("[INFO] Fine-tuned model loaded")
-        else:
-            path = "klue/bert-base"
-            print("[WARNING] Using base model")
-
-        _tokenizer = AutoTokenizer.from_pretrained(path)
-        _model = AutoModelForSequenceClassification.from_pretrained(path, num_labels=2)
-        _model.eval()
-
-    return _tokenizer, _model
-
-
 def _load_ner():
     global _ner_pipeline
-
     if _ner_pipeline is None:
-        _ner_pipeline = pipeline(
-            "ner",
-            model="klue/bert-base",
-            aggregation_strategy="simple"
-        )
-
+        _ner_pipeline = pipeline("ner", model="klue/bert-base", aggregation_strategy="simple")
     return _ner_pipeline
 
-
-# -----------------------------
-# 2. 룰 기반 필터 (강화)
-# -----------------------------
+# [정확도 복구] 사용자님의 원본 키워드 리스트 그대로 유지
 NEGATIVE_PATTERNS = [
-    # 감정/상태
-    "좋다", "춥다", "덥다", "행복", "피곤", "힘들", "재미", "지루",
-    "슬프", "기분", "느낌", "아프", "졸리",
-
-    # 일상 대화
-    "점심", "저녁", "아침", "커피", "밥", "식사", "날씨",
-    "운동", "게임", "영화", "음악", "쉬", "자다",
-
-    # 위치/이동
+    "좋다", "춥다", "덥다", "행복", "피곤", "힘들", "재미", "지루", "슬프", "기분", "느낌", "아프", "졸리",
+    "점심", "저녁", "아침", "커피", "밥", "식사", "날씨", "운동", "게임", "영화", "음악", "쉬", "자다",
     "퇴근", "출근", "집", "귀가", "외출"
 ]
 
 POSITIVE_PATTERNS = [
-    # 명령형/요청형
-    "해야", "하자", "할 것", "할게", "합시다",
-    "부탁", "요청", "바랍니다", "부탁드립니다", "드립니다",
-    "확인", "검토", "리뷰", "점검",
-
-    # 업무 동사
-    "진행", "작성", "제출", "준비", "참석", "예약",
-    "필요", "처리", "수행", "조치", "공유", "전달",
-    "보고", "회신", "답변", "승인", "결재",
-
-    # 시간 표현
-    "까지", "이내", "전까지", "내일", "오늘", "이번 주",
-    "다음 주", "금요일", "월요일",
-
-    # 업무 명사
-    "회의", "보고서", "문서", "자료", "기획", "개발",
-    "테스트", "배포", "미팅", "발표"
+    "해야", "하자", "할 것", "할게", "합시다", "부탁", "요청", "바랍니다", "부탁드립니다", "드립니다",
+    "확인", "검토", "리뷰", "점검", "진행", "작성", "제출", "준비", "참석", "예약", "필요", "처리", 
+    "수행", "조치", "공유", "전달", "보고", "회신", "답변", "승인", "결재", "까지", "이내", "전까지", 
+    "내일", "오늘", "이번 주", "다음 주", "금요일", "월요일", "회의", "보고서", "문서", "자료", 
+    "기획", "개발", "테스트", "배포", "미팅", "발표"
 ]
 
 PAST_PATTERNS = [
-    "했다", "했어", "했습니다", "했음",
-    "완료", "완료했", "완료됨",
-    "끝냈", "끝남", "마쳤", "마침",
-    "수행함", "수행했", "처리했", "진행했",
-    "작성했", "제출했", "참석했"
+    "했다", "했어", "했습니다", "했음", "완료", "완료했", "완료됨", "끝냈", "끝남", "마쳤", "마침",
+    "수행함", "수행했", "처리했", "진행했", "작성했", "제출했", "참석했"
 ]
 
-
-def _rule_filter(text):
-    """기존 룰 필터 (하위 호환)"""
-    if any(p in text for p in PAST_PATTERNS):
-        return False
-
-    if any(p in text for p in NEGATIVE_PATTERNS):
-        return False
-
-    if any(p in text for p in POSITIVE_PATTERNS):
-        return True
-
-    return None
-
-
+# [정확도 핵심] 사용자님의 강화된 필터 로직 복구
 def _enhanced_rule_filter(text):
-    """강화된 룰 필터 (정확도 향상)"""
     if not text or len(text.strip()) < 3:
         return False
-
     # 1. 과거형 필터 (최우선)
-    past_count = sum(1 for p in PAST_PATTERNS if p in text)
-    if past_count >= 1:
+    if any(p in text for p in PAST_PATTERNS):
         return False
-
-    # 2. 물음표로 끝나면 False
+    # 2. 물음표 종료
     if text.strip().endswith("?"):
         return False
-
-    # 3. 부정 패턴 체크
-    neg_count = sum(1 for p in NEGATIVE_PATTERNS if p in text)
-    if neg_count >= 2:  # 부정 키워드 2개 이상
+    # 3. 부정 패턴 체크 (2개 이상)
+    if sum(1 for p in NEGATIVE_PATTERNS if p in text) >= 2:
         return False
-
-    # 4. 긍정 패턴 체크
-    pos_count = sum(1 for p in POSITIVE_PATTERNS if p in text)
-    if pos_count >= 2:  # 긍정 키워드 2개 이상
+    # 4. 긍정 패턴 체크 (2개 이상)
+    if sum(1 for p in POSITIVE_PATTERNS if p in text) >= 2:
         return True
-
-    # 5. 단일 키워드로 강한 시그널
-    if pos_count == 1 and neg_count == 0:
-        # 업무 동사가 있으면 True
-        task_verbs = ["진행", "작성", "제출", "준비", "참석", "예약",
-                      "처리", "수행", "조치", "검토", "확인", "회신"]
+    # 5. 단일 키워드 + 업무 동사 강한 시그널
+    if sum(1 for p in POSITIVE_PATTERNS if p in text) == 1 and sum(1 for p in NEGATIVE_PATTERNS if p in text) == 0:
+        task_verbs = ["진행", "작성", "제출", "준비", "참석", "예약", "처리", "수행", "조치", "검토", "확인", "회신"]
         if any(v in text for v in task_verbs):
             return True
-
-    # 6. 애매하면 None (점수 기반으로 위임)
     return None
 
-
 def _score_based_filter(text):
-    """점수 기반 필터 (보조)"""
     score = 0
-
-    # 긍정 점수
-    for pattern in POSITIVE_PATTERNS:
-        if pattern in text:
-            score += 2
-
-    # 부정 점수
-    for pattern in NEGATIVE_PATTERNS:
-        if pattern in text:
-            score -= 3
-
-    # 과거형 감점
-    for pattern in PAST_PATTERNS:
-        if pattern in text:
-            score -= 5
-
-    # 임계값: 3점 이상이면 To-do
-    return score >= 3
-
-
+    for p in POSITIVE_PATTERNS:
+        if p in text: score += 2
+    for p in NEGATIVE_PATTERNS:
+        if p in text: score -= 3
+    for p in PAST_PATTERNS:
+        if p in text: score -= 5
+    return score >= 3  # 사용자님의 원본 임계값 3 유지
 
 def is_actual_todo(text):
-    """
-    텍스트가 실제 To-do인지 판단한다.
-
-    1. 강화된 규칙 필터 (빠르고 정확)
-    2. 점수 기반 필터 (보조)
-
-    """
     if not text or len(text.strip()) < 2:
         return False
-
-    # 1. 강화된 규칙 (80% 정확도)
-    rule = _enhanced_rule_filter(text)
-    if rule is not None:
-        return rule
-
-    # 2. 점수 기반 (보조)
+    rule_result = _enhanced_rule_filter(text)
+    if rule_result is not None:
+        return rule_result
     return _score_based_filter(text)
 
-
-# -----------------------------
-# 4. NER 기반 정보 추출
-# -----------------------------
 def extract_entities(text):
-    ner = _load_ner()
-    results = ner(text)
+    try:
+        ner = _load_ner()
+        results = ner(text)
+        extracted = {"time": [], "target": [], "action": []}
+        for r in results:
+            label, word = r["entity_group"], r["word"]
+            if label in ["DAT", "TIM"]: extracted["time"].append(word)
+            elif label in ["ORG", "LOC"]: extracted["target"].append(word)
+            else: extracted["action"].append(word)
+        return extracted
+    except:
+        return {"time": [], "target": [], "action": []}
 
-    extracted = {
-        "time": [],
-        "target": [],
-        "action": []
+# ---------------------------------------------------------
+# 2. MongoDB 연결 (dev 유지)
+# ---------------------------------------------------------
+_client = None
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = MongoClient(config.MONGODB_URI, serverSelectionTimeoutMS=5000)
+    return _client
+
+def _get_mail_collection():
+    client = _get_client()
+    col = client[config.MONGODB_DB][config.MONGODB_MAILS_COLLECTION]
+    col.create_index("mail_id", unique=True)
+    return col
+
+def _get_task_collection():
+    client = _get_client()
+    col = client[config.MONGODB_DB][config.MONGODB_TASKS_COLLECTION]
+    col.create_index("task_id", unique=True)
+    col.create_index("id", unique=True)
+    return col
+
+# ---------------------------------------------------------
+# 3. 데이터 저장 및 조회
+# ---------------------------------------------------------
+def save_mail(mail):
+    collection = _get_mail_collection()
+    mail_id = mail.get("mail_id") or _make_mail_id(mail.get("subject", ""), mail.get("sender", ""), mail.get("received_at", ""))
+    document = {
+        "mail_id": mail_id,
+        "subject": mail.get("subject", ""),
+        "sender": mail.get("sender", ""),
+        "received_at": mail.get("received_at", ""),
+        "body": mail.get("body", ""),
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
     }
+    collection.replace_one({"mail_id": mail_id}, document, upsert=True)
+    return document
 
-    for r in results:
-        word = r["word"]
-        label = r["entity_group"]
+def save_tasks(tasks):
+    if not tasks: return []
+    collection = _get_task_collection()
+    saved_documents = []
 
-        # KLUE NER 기준
-        if label in ["DAT", "TIM"]:
-            extracted["time"].append(word)
+    for task in tasks:
+        title = task.get("title") or task.get("subject", "")
+        
+        # 복구된 정확도 로직 적용
+        if not is_actual_todo(title):
+            continue
 
-        elif label in ["ORG", "LOC"]:
-            extracted["target"].append(word)
+        entities = extract_entities(title)
+        task_id = task.get("task_id") or _make_task_id(task.get("mail_id", ""), title, task.get("task_order", 1))
 
-        else:
-            extracted["action"].append(word)
+        document = {
+            "task_id": task_id,
+            "id": task_id,
+            "mail_id": task.get("mail_id", ""),
+            "title": title,
+            "status": task.get("status", "대기"),
+            "task_type": classify_task_type(title),
+            "time": ", ".join(entities["time"]),
+            "target": ", ".join(entities["target"]),
+            "action": ", ".join(entities["action"]),
+            "received_at": task.get("received_at", ""),
+            "created_at": _now_iso(),
+            "updated_at": _now_iso(),
+        }
+        collection.replace_one({"task_id": task_id}, document, upsert=True)
+        saved_documents.append(document)
+    return saved_documents
 
-    return extracted
+def load_tasks():
+    collection = _get_task_collection()
+    return list(collection.find({}, {"_id": 0}).sort("received_at", DESCENDING))
 
+def update_status(task_id, notified=None, status=None):
+    updates = {"updated_at": _now_iso()}
+    if notified is not None: updates["notified"] = bool(notified)
+    if status is not None: updates["status"] = status
+    collection = _get_task_collection()
+    collection.update_one({"$or": [{"task_id": task_id}, {"id": task_id}]}, {"$set": updates})
 
-# -----------------------------
-# 5. CSV 로드
-# -----------------------------
-def load_todos():
-    if not os.path.exists(config.TODO_CSV):
-        return []
-
-    with open(config.TODO_CSV, mode='r', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
-        return list(reader)
-
-
-# -----------------------------
-# 6. CSV 저장
-# -----------------------------
-def save_todo(task, existing_todos):
-    task["id"] = _make_id(task["subject"], task["sender"])
-    text = task.get("task_summary", task.get("subject", ""))
-
-    if any(todo['id'] == task["id"] for todo in existing_todos):
-        return
-
-    if not is_actual_todo(text):
-        print(f"[필터링] 비 To-Do: {text}")
-        return
-
-    # 🔥 NER 추가
-    entities = extract_entities(text)
-
-    task["time"] = ", ".join(entities["time"])
-    task["target"] = ", ".join(entities["target"])
-    task["action"] = ", ".join(entities["action"])
-
-    task["task_type"] = classify_task_type(text)
-
-    file_exists = os.path.exists(config.TODO_CSV)
-
-    with open(config.TODO_CSV, mode='a', encoding='utf-8-sig', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=config.CSV_COLUMNS)
-
-        if not file_exists:
-            writer.writeheader()
-
-        writer.writerow(task)
-
-    print(f"[저장] {text}")
-
-
-# -----------------------------
-# 7. 상태 업데이트
-# -----------------------------
-def update_status(task_id, notified=False, status=None):
-    todos = load_todos()
-
-    for todo in todos:
-        if todo['id'] == task_id:
-            if status:
-                todo['status'] = status
-            todo['notified'] = str(notified)
-            break
-
-    with open(config.TODO_CSV, mode='w', encoding='utf-8-sig', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=config.CSV_COLUMNS)
-        writer.writeheader()
-        writer.writerows(todos)
-
-
-# -----------------------------
-# 8. 업무 유형 분류
-# -----------------------------
 def classify_task_type(text):
-    if any(x in text for x in ["보고서", "작성", "문서"]):
-        return "보고서"
-    if any(x in text for x in ["회의", "미팅"]):
-        return "회의"
-    if any(x in text for x in ["검토", "리뷰"]):
-        return "검토"
-    if any(x in text for x in ["결재", "승인"]):
-        return "결재"
-    if any(x in text for x in ["개발", "코드", "패치"]):
-        return "개발"
-
+    # 사용자님의 원본 분류 로직 유지
+    if any(x in text for x in ["보고서", "작성", "문서"]): return "보고서"
+    if any(x in text for x in ["회의", "미팅"]): return "회의"
+    if any(x in text for x in ["검토", "리뷰"]): return "검토"
+    if any(x in text for x in ["결재", "승인"]): return "결재"
+    if any(x in text for x in ["개발", "코드", "패치"]): return "개발"
     return "기타"
 
+def _make_mail_id(subject, sender, received_at):
+    raw = f"{subject}_{sender}_{received_at}"
+    return hashlib.md5(raw.encode()).hexdigest()[:16]
 
-# -----------------------------
-# 10. ID 생성
-# -----------------------------
-def _make_id(subject, sender):
-    raw = f"{subject}_{sender}"
-    return hashlib.md5(raw.encode()).hexdigest()[:12]
+def _make_task_id(mail_id, title, task_order):
+    raw = f"{mail_id}_{task_order}_{title}"
+    return hashlib.md5(raw.encode()).hexdigest()[:16]
+
+def _now_iso():
+    return datetime.utcnow().isoformat(timespec="seconds")

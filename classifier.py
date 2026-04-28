@@ -159,7 +159,7 @@ def group_similar_tasks(todos):
                 continue
 
             # 제목 단어 집합이 절반 이상 겹치면 같은 그룹으로 본다.
-            if _similarity(left["subject"], right["subject"]) >= 0.5:
+            if _similarity(_task_label(left), _task_label(right)) >= 0.5:
                 group.append(right)
                 used.add(other_index)
 
@@ -188,3 +188,8 @@ def _similarity(left_text, right_text):
     if not left_words or not right_words:
         return 0.0
     return len(left_words & right_words) / len(left_words | right_words)
+
+
+def _task_label(task):
+    """Task 문서가 있으면 title을, 아니면 기존 subject를 비교 기준으로 사용한다."""
+    return task.get("title") or task.get("subject", "")
