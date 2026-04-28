@@ -25,6 +25,7 @@ CSV_COLUMNS = [
     "urgency_level",  # 긴급도 등급: 긴급/보통/여유 (차규진 담당)
     "status",         # 상태: 대기/진행중/완료
     "received_at",    # 수신 일시 (YYYY-MM-DD HH:MM)
+    "notified",       # 완료 알림 발송 여부: True/False (규진 차 담당)
 ]
 
 # 메일 필터 키워드
