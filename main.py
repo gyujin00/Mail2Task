@@ -38,7 +38,8 @@ def run_inbound_pipeline():
         for path in pdf_paths:
             pdf_text += extract_text_from_pdf(path)
 
-        full_text = body + "\n" + pdf_text
+        # 제목의 (~04/30) 같은 표현도 마감일 해석에 쓰이므로 함께 합친다.
+        full_text = "\n".join(part for part in [subject, body, pdf_text] if part)
 
         # 중복 감지
         if is_duplicate(subject, sender, existing_todos):
@@ -52,7 +53,12 @@ def run_inbound_pipeline():
         task_summary = summarize(full_text)
 
         # 긴급도 분류 (규진 차) — deadline은 이미 파싱된 값 사용
-        urgency_score, urgency_level, _ = score_urgency(full_text, received_at)
+        # 마감일은 deadline_parser에서 한 번만 해석하고 classifier는 그 결과만 사용한다.
+        urgency_score, urgency_level, _ = score_urgency(
+            full_text,
+            received_at,
+            deadline=deadline,
+        )
 
         task = {
             "subject":       subject,
