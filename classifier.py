@@ -30,21 +30,26 @@ def score_urgency(text, received_at):
     """
     score = 0
 
-    for kw in URGENT_KEYWORDS:
-        if kw in text:
-            score += 50
-            break
+    # 구조화 필드: '우선순위: 상/중/하' 가 있으면 해당 점수를 기준으로 사용
+    priority_score = _parse_priority(text)
+    if priority_score is not None:
+        score = priority_score
+    else:
+        # 비정형 키워드 기반 점수
+        for kw in URGENT_KEYWORDS:
+            if kw in text:
+                score += 50
+                break
+        for kw in HIGH_KEYWORDS:
+            if kw in text:
+                score += 30
+                break
+        for kw in MID_KEYWORDS:
+            if kw in text:
+                score += 10
+                break
 
-    for kw in HIGH_KEYWORDS:
-        if kw in text:
-            score += 30
-            break
-
-    for kw in MID_KEYWORDS:
-        if kw in text:
-            score += 10
-            break
-
+    # 마감일 기반 가산점
     deadline = _parse_deadline(text, received_at)
     if deadline:
         try:
@@ -71,14 +76,39 @@ def score_urgency(text, received_at):
     return score, level, deadline
 
 
+def _parse_priority(text):
+    """
+    본문의 '우선순위: 상/중/하' 필드를 파싱하여 점수를 반환한다.
+    필드가 없으면 None 반환.
+    """
+    m = re.search(r"우선순위\s*[:：]\s*(상|중|하)", text)
+    if m:
+        return config.PRIORITY_SCORE.get(m.group(1))
+    return None
+
+
 def _parse_deadline(text, received_at):
     """텍스트에서 마감일을 추출한다. 실패 시 빈 문자열 반환."""
-    # "YYYY-MM-DD" 또는 "YYYY/MM/DD" 형식
+    # 구조화 필드: "마감기한: 2026-04-30 (목) 15:00"
+    m = re.search(r"마감기한\s*[:：]\s*(\d{4})-(\d{2})-(\d{2})", text)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+
+    # 제목의 (~MM/DD) 형식
+    m = re.search(r"~(\d{1,2})/(\d{1,2})", text)
+    if m:
+        try:
+            year = datetime.strptime(received_at, "%Y-%m-%d %H:%M").year
+            return f"{year}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+        except ValueError:
+            pass
+
+    # 일반 "YYYY-MM-DD" 형식
     m = re.search(r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})", text)
     if m:
         return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
 
-    # "MM월 DD일" 형식 → 수신 연도 기준으로 보완
+    # "MM월 DD일" 형식
     m = re.search(r"(\d{1,2})월\s*(\d{1,2})일", text)
     if m:
         try:

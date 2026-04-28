@@ -8,6 +8,7 @@ import email
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 import os
+import re
 import config
 
 
@@ -37,7 +38,7 @@ def fetch_target_mails():
         msg = email.message_from_bytes(data[0][1])
 
         subject = _decode_str(msg["Subject"])
-        if config.KEYWORD_FILTER not in subject:
+        if not re.search(config.SUBJECT_PATTERN, subject):
             continue
 
         sender = parseaddr(msg["From"])[1]

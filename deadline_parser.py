@@ -19,13 +19,22 @@ def parse_deadline(text, received_at):
     """
     base = _parse_base_date(received_at)
 
-    # TODO: 아래 패턴들을 구현하세요.
-    # 패턴 1: "YYYY-MM-DD" / "YYYY/MM/DD" / "YYYY.MM.DD"
-    # 패턴 2: "MM월 DD일" → base.year 기준으로 연도 보완
-    # 패턴 3: "이번 주 금요일", "다음 주 월요일" 등 상대 표현
-    # 패턴 4: "D일 후", "D일 이내" 등 상대 표현
+    # TODO: 아래 패턴들을 구현하세요. (우선순위 순서대로 시도)
     #
-    # 힌트: re.search(r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})", text)
+    # 패턴 1 [최우선]: 구조화 필드 "마감기한: 2026-04-30 (목) 15:00"
+    #   re.search(r"마감기한\s*[:：]\s*(\d{4})-(\d{2})-(\d{2})", text)
+    #
+    # 패턴 2: 제목의 (~MM/DD) 형식  예) (~05/02)
+    #   re.search(r"~(\d{1,2})/(\d{1,2})", text) → base.year 로 연도 보완
+    #
+    # 패턴 3: 일반 날짜 "YYYY-MM-DD" / "YYYY/MM/DD" / "YYYY.MM.DD"
+    #   re.search(r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})", text)
+    #
+    # 패턴 4: "MM월 DD일" → base.year 기준으로 연도 보완
+    #   re.search(r"(\d{1,2})월\s*(\d{1,2})일", text)
+    #
+    # 패턴 5: "이번 주 금요일", "다음 주 월요일" 등 상대 표현 (선택 구현)
+    # 패턴 6: "D일 후", "D일 이내" 등 상대 표현 (선택 구현)
 
     return ""
 
