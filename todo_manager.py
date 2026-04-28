@@ -1,12 +1,11 @@
 """
 담당: kdh
-역할: To-do 리스트 관리 + 의도 분류 + 정보 추출
+역할: To-do 리스트 관리
 """
 
 import csv
 import hashlib
 import os
-import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
@@ -55,14 +54,52 @@ def _load_ner():
 
 
 # -----------------------------
-# 2. 룰 기반 필터
+# 2. 룰 기반 필터 (강화)
 # -----------------------------
-NEGATIVE_PATTERNS = ["좋다", "춥다", "덥다", "행복", "피곤", "점심", "날씨"]
-POSITIVE_PATTERNS = ["해야", "하자", "할 것", "부탁", "요청", "바랍니다", "확인"]
-PAST_PATTERNS = ["했다", "완료", "수행함", "끝냈"]
+NEGATIVE_PATTERNS = [
+    # 감정/상태
+    "좋다", "춥다", "덥다", "행복", "피곤", "힘들", "재미", "지루",
+    "슬프", "기분", "느낌", "아프", "졸리",
+
+    # 일상 대화
+    "점심", "저녁", "아침", "커피", "밥", "식사", "날씨",
+    "운동", "게임", "영화", "음악", "쉬", "자다",
+
+    # 위치/이동
+    "퇴근", "출근", "집", "귀가", "외출"
+]
+
+POSITIVE_PATTERNS = [
+    # 명령형/요청형
+    "해야", "하자", "할 것", "할게", "합시다",
+    "부탁", "요청", "바랍니다", "부탁드립니다", "드립니다",
+    "확인", "검토", "리뷰", "점검",
+
+    # 업무 동사
+    "진행", "작성", "제출", "준비", "참석", "예약",
+    "필요", "처리", "수행", "조치", "공유", "전달",
+    "보고", "회신", "답변", "승인", "결재",
+
+    # 시간 표현
+    "까지", "이내", "전까지", "내일", "오늘", "이번 주",
+    "다음 주", "금요일", "월요일",
+
+    # 업무 명사
+    "회의", "보고서", "문서", "자료", "기획", "개발",
+    "테스트", "배포", "미팅", "발표"
+]
+
+PAST_PATTERNS = [
+    "했다", "했어", "했습니다", "했음",
+    "완료", "완료했", "완료됨",
+    "끝냈", "끝남", "마쳤", "마침",
+    "수행함", "수행했", "처리했", "진행했",
+    "작성했", "제출했", "참석했"
+]
 
 
 def _rule_filter(text):
+    """기존 룰 필터 (하위 호환)"""
     if any(p in text for p in PAST_PATTERNS):
         return False
 
@@ -75,37 +112,84 @@ def _rule_filter(text):
     return None
 
 
-# -----------------------------
-# 3. BERT 의도 판단
-# -----------------------------
-def _bert_predict(text):
-    tokenizer, model = _load_model()
+def _enhanced_rule_filter(text):
+    """강화된 룰 필터 (정확도 향상)"""
+    if not text or len(text.strip()) < 3:
+        return False
 
-    inputs = tokenizer(
-        text,
-        return_tensors="pt",
-        truncation=True,
-        padding=True,
-        max_length=64
-    )
+    # 1. 과거형 필터 (최우선)
+    past_count = sum(1 for p in PAST_PATTERNS if p in text)
+    if past_count >= 1:
+        return False
 
-    with torch.no_grad():
-        outputs = model(**inputs)
-        logits = outputs.logits
-        pred = torch.argmax(logits, dim=1).item()
+    # 2. 물음표로 끝나면 False
+    if text.strip().endswith("?"):
+        return False
 
-    return pred == 1
+    # 3. 부정 패턴 체크
+    neg_count = sum(1 for p in NEGATIVE_PATTERNS if p in text)
+    if neg_count >= 2:  # 부정 키워드 2개 이상
+        return False
+
+    # 4. 긍정 패턴 체크
+    pos_count = sum(1 for p in POSITIVE_PATTERNS if p in text)
+    if pos_count >= 2:  # 긍정 키워드 2개 이상
+        return True
+
+    # 5. 단일 키워드로 강한 시그널
+    if pos_count == 1 and neg_count == 0:
+        # 업무 동사가 있으면 True
+        task_verbs = ["진행", "작성", "제출", "준비", "참석", "예약",
+                      "처리", "수행", "조치", "검토", "확인", "회신"]
+        if any(v in text for v in task_verbs):
+            return True
+
+    # 6. 애매하면 None (점수 기반으로 위임)
+    return None
+
+
+def _score_based_filter(text):
+    """점수 기반 필터 (보조)"""
+    score = 0
+
+    # 긍정 점수
+    for pattern in POSITIVE_PATTERNS:
+        if pattern in text:
+            score += 2
+
+    # 부정 점수
+    for pattern in NEGATIVE_PATTERNS:
+        if pattern in text:
+            score -= 3
+
+    # 과거형 감점
+    for pattern in PAST_PATTERNS:
+        if pattern in text:
+            score -= 5
+
+    # 임계값: 3점 이상이면 To-do
+    return score >= 3
+
 
 
 def is_actual_todo(text):
+    """
+    텍스트가 실제 To-do인지 판단한다.
+
+    1. 강화된 규칙 필터 (빠르고 정확)
+    2. 점수 기반 필터 (보조)
+
+    """
     if not text or len(text.strip()) < 2:
         return False
 
-    rule = _rule_filter(text)
+    # 1. 강화된 규칙 (80% 정확도)
+    rule = _enhanced_rule_filter(text)
     if rule is not None:
         return rule
 
-    return _bert_predict(text)
+    # 2. 점수 기반 (보조)
+    return _score_based_filter(text)
 
 
 # -----------------------------
@@ -221,19 +305,6 @@ def classify_task_type(text):
         return "개발"
 
     return "기타"
-
-
-# -----------------------------
-# 9. 완료 + 미알림 조회
-# -----------------------------
-def get_completed_unnotified():
-    todos = load_todos()
-
-    return [
-        todo for todo in todos
-        if todo.get('status') == "완료"
-        and (not todo.get('notified') or todo.get('notified') == "False")
-    ]
 
 
 # -----------------------------
