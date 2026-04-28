@@ -31,8 +31,9 @@ def fetch_target_mails():
     mail.select("inbox")
 
     _, data = mail.search(None, "ALL")
-    mail_ids = data[0].split()
+    mail_ids = data[0].split()[-50:]  # 최근 50개만 확인
 
+    print(f"최근 {len(mail_ids)}개 메일 검색 중...")
     for mail_id in reversed(mail_ids):
         _, data = mail.fetch(mail_id, "(RFC822)")
         msg = email.message_from_bytes(data[0][1])
