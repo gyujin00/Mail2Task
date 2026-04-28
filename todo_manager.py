@@ -1,284 +1,244 @@
 """
-MongoDB 저장소 모듈.
-
-이 프로젝트는 메일 원본과 업무(Task)를 분리해서 저장한다.
-- mails 컬렉션: 수집된 메일 원문, 첨부 파일, PDF 텍스트
-- tasks 컬렉션: 메일에서 추출된 개별 업무
-
-통계는 tasks 컬렉션을 기준으로 계산하고,
-완료 알림과 상태 변경도 tasks 컬렉션을 대상으로 수행한다.
+담당: kdh
+역할: To-do 리스트 관리 + 의도 분류 + 정보 추출
 """
 
-from __future__ import annotations
-
+import csv
 import hashlib
-from datetime import datetime
-import re
-
-from pymongo import DESCENDING, MongoClient
-
+import os
+import torch
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    pipeline
+)
 import config
 
 
-_client = None
+# -----------------------------
+# 1. Lazy Loading (모델)
+# -----------------------------
+_tokenizer = None
+_model = None
+_ner_pipeline = None
 
 
-def load_todos():
-    """기존 호출부 호환용 별칭. 내부적으로 tasks 컬렉션을 읽는다."""
-    return load_tasks()
+def _load_model():
+    global _tokenizer, _model
+
+    if _tokenizer is None:
+        if os.path.exists("./todo_model"):
+            path = "./todo_model"
+            print("[INFO] Fine-tuned model loaded")
+        else:
+            path = "klue/bert-base"
+            print("[WARNING] Using base model")
+
+        _tokenizer = AutoTokenizer.from_pretrained(path)
+        _model = AutoModelForSequenceClassification.from_pretrained(path, num_labels=2)
+        _model.eval()
+
+    return _tokenizer, _model
 
 
-def load_tasks():
-    """저장된 업무(Task) 문서를 최신 수신일 기준으로 불러온다."""
-    collection = _get_task_collection()
-    return list(collection.find({}, {"_id": 0}).sort("received_at", DESCENDING))
+def _load_ner():
+    global _ner_pipeline
+
+    if _ner_pipeline is None:
+        _ner_pipeline = pipeline(
+            "ner",
+            model="klue/bert-base",
+            aggregation_strategy="simple"
+        )
+
+    return _ner_pipeline
 
 
-def save_mail(mail):
-    """메일 원문 문서를 mails 컬렉션에 저장하고 저장 결과를 반환한다."""
-    collection = _get_mail_collection()
+# -----------------------------
+# 2. 룰 기반 필터
+# -----------------------------
+NEGATIVE_PATTERNS = ["좋다", "춥다", "덥다", "행복", "피곤", "점심", "날씨"]
+POSITIVE_PATTERNS = ["해야", "하자", "할 것", "부탁", "요청", "바랍니다", "확인"]
+PAST_PATTERNS = ["했다", "완료", "수행함", "끝냈"]
 
-    mail_id = mail.get("mail_id") or _make_mail_id(
-        mail.get("subject", ""),
-        mail.get("sender", ""),
-        mail.get("received_at", ""),
+
+def _rule_filter(text):
+    if any(p in text for p in PAST_PATTERNS):
+        return False
+
+    if any(p in text for p in NEGATIVE_PATTERNS):
+        return False
+
+    if any(p in text for p in POSITIVE_PATTERNS):
+        return True
+
+    return None
+
+
+# -----------------------------
+# 3. BERT 의도 판단
+# -----------------------------
+def _bert_predict(text):
+    tokenizer, model = _load_model()
+
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        padding=True,
+        max_length=64
     )
-    pdf_files = mail.get("pdf_files", [])
-    document = {
-        "mail_id": mail_id,
-        "subject": mail.get("subject", ""),
-        "mail_category": mail.get("mail_category") or _extract_mail_category(
-            mail.get("subject", "")
-        ),
-        "sender": mail.get("sender", ""),
-        "received_at": mail.get("received_at", ""),
-        "body": mail.get("body", ""),
-        "pdf_files": pdf_files,
-        "pdf_paths": [file.get("path", "") for file in pdf_files if file.get("path")],
-        "has_pdf": bool(pdf_files),
-        "pdf_count": len(pdf_files),
-        "created_at": mail.get("created_at") or _now_iso(),
-        "updated_at": _now_iso(),
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+        logits = outputs.logits
+        pred = torch.argmax(logits, dim=1).item()
+
+    return pred == 1
+
+
+def is_actual_todo(text):
+    if not text or len(text.strip()) < 2:
+        return False
+
+    rule = _rule_filter(text)
+    if rule is not None:
+        return rule
+
+    return _bert_predict(text)
+
+
+# -----------------------------
+# 4. NER 기반 정보 추출
+# -----------------------------
+def extract_entities(text):
+    ner = _load_ner()
+    results = ner(text)
+
+    extracted = {
+        "time": [],
+        "target": [],
+        "action": []
     }
 
-    collection.replace_one({"mail_id": mail_id}, document, upsert=True)
-    return document
+    for r in results:
+        word = r["word"]
+        label = r["entity_group"]
+
+        # KLUE NER 기준
+        if label in ["DAT", "TIM"]:
+            extracted["time"].append(word)
+
+        elif label in ["ORG", "LOC"]:
+            extracted["target"].append(word)
+
+        else:
+            extracted["action"].append(word)
+
+    return extracted
 
 
-def save_tasks(tasks):
-    """추출된 업무(Task) 목록을 tasks 컬렉션에 저장한다."""
-    if not tasks:
+# -----------------------------
+# 5. CSV 로드
+# -----------------------------
+def load_todos():
+    if not os.path.exists(config.TODO_CSV):
         return []
 
-    collection = _get_task_collection()
-    now_text = _now_iso()
-    saved_documents = []
-
-    for task in tasks:
-        task_id = task.get("task_id") or task.get("id")
-        if not task_id:
-            task_id = _make_task_id(
-                task.get("mail_id", ""),
-                task.get("title") or task.get("subject", ""),
-                task.get("task_order", 1),
-            )
-
-        deadline_date = task.get("deadline_date") or task.get("deadline", "")
-        deadline_time = task.get("deadline_time", "")
-        document = {
-            "task_id": task_id,
-            "id": task_id,
-            "mail_id": task.get("mail_id", ""),
-            "task_order": task.get("task_order", 1),
-            "title": task.get("title") or task.get("subject", ""),
-            "subject": task.get("subject", ""),
-            "sender": task.get("sender", ""),
-            "status": task.get("status", "대기"),
-            "task_type": task.get("task_type")
-            or classify_task_type(task.get("source_text") or task.get("raw_body", "")),
-            "priority_raw": task.get("priority_raw", ""),
-            "urgency_score": task.get("urgency_score", 0),
-            "urgency_level": task.get("urgency_level", ""),
-            "deadline_date": deadline_date,
-            "deadline": deadline_date,
-            "deadline_time": deadline_time,
-            "deadline_at": task.get("deadline_at")
-            or _build_deadline_at(deadline_date, deadline_time),
-            "deadline_source": task.get("deadline_source", ""),
-            "deadline_raw_text": task.get("deadline_raw_text", ""),
-            "mail_category": task.get("mail_category")
-            or _extract_mail_category(task.get("subject", "")),
-            "received_at": task.get("received_at", ""),
-            "has_pdf": bool(task.get("has_pdf", False)),
-            "pdf_count": int(task.get("pdf_count", 0)),
-            "pdf_paths": task.get("pdf_paths", []),
-            "summary": task.get("summary") or task.get("task_summary", ""),
-            "task_summary": task.get("summary") or task.get("task_summary", ""),
-            "source_text": task.get("source_text", ""),
-            "raw_body": task.get("raw_body", ""),
-            "notified": bool(task.get("notified", False)),
-            "created_at": task.get("created_at") or now_text,
-            "updated_at": now_text,
-        }
-
-        collection.replace_one({"task_id": task_id}, document, upsert=True)
-        saved_documents.append(document)
-
-    return saved_documents
+    with open(config.TODO_CSV, mode='r', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        return list(reader)
 
 
+# -----------------------------
+# 6. CSV 저장
+# -----------------------------
 def save_todo(task, existing_todos):
-    """
-    기존 단일 업무 저장 호출부와의 호환용 래퍼.
+    task["id"] = _make_id(task["subject"], task["sender"])
+    text = task.get("task_summary", task.get("subject", ""))
 
-    새 구조에서는 업무가 여러 건일 수 있으므로 save_tasks를 사용한다.
-    """
-    del existing_todos
-    return save_tasks([task])
+    if any(todo['id'] == task["id"] for todo in existing_todos):
+        return
+
+    if not is_actual_todo(text):
+        print(f"[필터링] 비 To-Do: {text}")
+        return
+
+    # 🔥 NER 추가
+    entities = extract_entities(text)
+
+    task["time"] = ", ".join(entities["time"])
+    task["target"] = ", ".join(entities["target"])
+    task["action"] = ", ".join(entities["action"])
+
+    task["task_type"] = classify_task_type(text)
+
+    file_exists = os.path.exists(config.TODO_CSV)
+
+    with open(config.TODO_CSV, mode='a', encoding='utf-8-sig', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=config.CSV_COLUMNS)
+
+        if not file_exists:
+            writer.writeheader()
+
+        writer.writerow(task)
+
+    print(f"[저장] {text}")
 
 
-def update_status(task_id, notified=None, status=None):
-    """특정 업무(Task)의 상태나 알림 여부를 갱신한다."""
-    updates = {"updated_at": _now_iso()}
+# -----------------------------
+# 7. 상태 업데이트
+# -----------------------------
+def update_status(task_id, notified=False, status=None):
+    todos = load_todos()
 
-    if notified is not None:
-        updates["notified"] = bool(notified)
+    for todo in todos:
+        if todo['id'] == task_id:
+            if status:
+                todo['status'] = status
+            todo['notified'] = str(notified)
+            break
 
-    if status is not None:
-        updates["status"] = status
-
-    collection = _get_task_collection()
-    collection.update_one(
-        {"$or": [{"task_id": task_id}, {"id": task_id}]},
-        {"$set": updates},
-    )
+    with open(config.TODO_CSV, mode='w', encoding='utf-8-sig', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=config.CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(todos)
 
 
+# -----------------------------
+# 8. 업무 유형 분류
+# -----------------------------
 def classify_task_type(text):
-    """본문이나 요약에서 업무 유형을 분류한다."""
-    if not text:
-        return "기타"
-
-    structured_match = re.search(
-        r"(?:업무유형|task\s*type)\s*[:：]?\s*([^\n\r]+)",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if structured_match:
-        raw_value = structured_match.group(1).strip()
-        normalized_value = raw_value.lower()
-        if "프로젝트" in raw_value or "project" in normalized_value:
-            return "프로젝트"
-        if "루틴" in raw_value or "routine" in normalized_value:
-            return "루틴"
-        if "행정" in raw_value or "admin" in normalized_value:
-            return "행정"
-        return "기타"
-
-    keyword_rules = {
-        "프로젝트": ["프로젝트", "시안", "개발", "구축", "런칭"],
-        "루틴": ["정기", "매일", "매주", "반복", "월간"],
-        "행정": ["행정", "정산", "결산", "비품", "증빙", "보고"],
-    }
-
-    for task_type, keywords in keyword_rules.items():
-        if any(keyword in text for keyword in keywords):
-            return task_type
+    if any(x in text for x in ["보고서", "작성", "문서"]):
+        return "보고서"
+    if any(x in text for x in ["회의", "미팅"]):
+        return "회의"
+    if any(x in text for x in ["검토", "리뷰"]):
+        return "검토"
+    if any(x in text for x in ["결재", "승인"]):
+        return "결재"
+    if any(x in text for x in ["개발", "코드", "패치"]):
+        return "개발"
 
     return "기타"
 
 
+# -----------------------------
+# 9. 완료 + 미알림 조회
+# -----------------------------
 def get_completed_unnotified():
-    """완료되었지만 아직 완료 알림을 보내지 않은 업무를 조회한다."""
-    collection = _get_task_collection()
-    documents = list(
-        collection.find(
-            {
-                "status": "완료",
-                "$or": [
-                    {"notified": False},
-                    {"notified": {"$exists": False}},
-                ],
-            },
-            {"_id": 0},
-        ).sort("received_at", DESCENDING)
-    )
-    return documents
+    todos = load_todos()
+
+    return [
+        todo for todo in todos
+        if todo.get('status') == "완료"
+        and (not todo.get('notified') or todo.get('notified') == "False")
+    ]
 
 
-def mail_exists(subject, sender, received_at):
-    """같은 메일이 이미 저장되어 있는지 확인한다."""
-    collection = _get_mail_collection()
-    mail_id = _make_mail_id(subject, sender, received_at)
-    return (
-        collection.count_documents({"mail_id": mail_id}, limit=1) > 0
-    )
-
-
-def _get_mail_collection():
-    """MongoDB mails 컬렉션을 반환하고 필요한 인덱스를 보장한다."""
-    client = _get_client()
-    collection = client[config.MONGODB_DB][config.MONGODB_MAILS_COLLECTION]
-    collection.create_index("mail_id", unique=True)
-    collection.create_index("received_at")
-    collection.create_index("mail_category")
-    return collection
-
-
-def _get_task_collection():
-    """MongoDB tasks 컬렉션을 반환하고 필요한 인덱스를 보장한다."""
-    client = _get_client()
-    collection = client[config.MONGODB_DB][config.MONGODB_TASKS_COLLECTION]
-    collection.create_index("task_id", unique=True)
-    collection.create_index("id", unique=True)
-    collection.create_index("mail_id")
-    collection.create_index("status")
-    collection.create_index("deadline_date")
-    collection.create_index("task_type")
-    collection.create_index("urgency_level")
-    collection.create_index("mail_category")
-    return collection
-
-
-def _get_client():
-    """MongoDB 클라이언트를 재사용한다."""
-    global _client
-    if _client is None:
-        _client = MongoClient(config.MONGODB_URI, serverSelectionTimeoutMS=5000)
-        _client.admin.command("ping")
-    return _client
-
-
-def _extract_mail_category(subject):
-    """제목 앞의 [운영], [업무요청] 같은 말머리를 추출한다."""
-    match = re.match(r"^\[([^\]]+)\]", subject or "")
-    if match:
-        return match.group(1).strip()
-    return ""
-
-
-def _make_mail_id(subject, sender, received_at):
-    """제목, 발신자, 수신시각을 기준으로 안정적인 메일 ID를 만든다."""
-    raw = f"{subject}_{sender}_{received_at}"
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def _make_task_id(mail_id, title, task_order):
-    """메일 ID와 업무 순서를 기준으로 안정적인 Task ID를 만든다."""
-    raw = f"{mail_id}_{task_order}_{title}"
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def _build_deadline_at(deadline_date, deadline_time):
-    """날짜/시간 필드를 하나의 ISO 문자열로 합친다."""
-    if not deadline_date:
-        return ""
-
-    if deadline_time:
-        return f"{deadline_date}T{deadline_time}:00"
-    return f"{deadline_date}T23:59:59"
-
-
-def _now_iso():
-    """현재 시각을 ISO 문자열로 반환한다."""
-    return datetime.utcnow().isoformat(timespec="seconds")
+# -----------------------------
+# 10. ID 생성
+# -----------------------------
+def _make_id(subject, sender):
+    raw = f"{subject}_{sender}"
+    return hashlib.md5(raw.encode()).hexdigest()[:12]
