@@ -15,10 +15,21 @@ def extract_text_from_pdf(pdf_path):
     반환:
         str: 추출된 전체 텍스트. 실패 시 빈 문자열 반환.
     """
-    # TODO: pdfplumber로 pdf_path를 열어 각 페이지 텍스트를 합쳐서 반환
-    # 강의안 4/4 슬라이드 코드 참고
-    #
-    # with pdfplumber.open(pdf_path) as pdf:
-    #     ...
+    if not pdf_path:
+        return ""
 
-    return ""
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            text_parts = []
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+
+            return "\n".join(text_parts)
+    except FileNotFoundError:
+        print(f"[오류] PDF 파일을 찾을 수 없습니다: {pdf_path}")
+        return ""
+    except Exception as e:
+        print(f"[오류] PDF 텍스트 추출 실패 ({pdf_path}): {e}")
+        return ""
