@@ -19,13 +19,17 @@ def extract_text_from_pdf(pdf_path):
         return ""
 
     try:
-        texts = []
         with pdfplumber.open(pdf_path) as pdf:
+            text_parts = []
             for page in pdf.pages:
-                page_text = page.extract_text() or ""
-                page_text = page_text.strip()
+                page_text = page.extract_text()
                 if page_text:
-                    texts.append(page_text)
-        return "\n\n".join(texts).strip()
-    except Exception:
+                    text_parts.append(page_text)
+
+            return "\n".join(text_parts)
+    except FileNotFoundError:
+        print(f"[오류] PDF 파일을 찾을 수 없습니다: {pdf_path}")
+        return ""
+    except Exception as e:
+        print(f"[오류] PDF 텍스트 추출 실패 ({pdf_path}): {e}")
         return ""
