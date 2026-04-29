@@ -109,6 +109,11 @@ def mail_exists(subject, sender, received_at):
     return mongo_task_store.mail_exists(subject, sender, received_at)
 
 
+def mail_has_tasks(subject, sender, received_at):
+    """같은 메일이 기존에 Task까지 저장되었는지 확인한다."""
+    return mongo_task_store.mail_has_tasks(subject, sender, received_at)
+
+
 def classify_task_type(text):
     """
     todo_manager 원본 분류기를 우선 사용하고, 부족한 경우 현재 규칙으로 보완한다.
@@ -197,12 +202,25 @@ def _get_todo_manager_module():
 
 def _rule_filter(text):
     """todo_manager와 비슷한 규칙 기반 fallback."""
+    normalized_text = (text or "").strip()
+    structured_markers = [
+        "과업명:", "업무명:", "업무유형:", "마감일:", "마감기한:", "요청사항:",
+        "대상:", "우선순위:",
+    ]
+    if any(marker in normalized_text for marker in structured_markers):
+        return True
+
     negative_patterns = ["좋다", "춥다", "덥다", "행복", "피곤", "점심", "날씨"]
     positive_patterns = ["해야", "하자", "할 것", "부탁", "요청", "바랍니다", "확인"]
-    past_patterns = ["했다", "완료", "수행함", "끝냈"]
+    past_patterns = ["했습니다", "했음", "수행함", "끝냈", "완료되었습니다", "완료됐습니다", "완료됨"]
 
     if any(pattern in text for pattern in past_patterns):
         return False
+    if "완료" in text and not any(
+        marker in text for marker in ("완료 후", "완료시", "완료 시", "완료하면", "완료하기")
+    ):
+        if not any(pattern in text for pattern in positive_patterns):
+            return False
     if any(pattern in text for pattern in negative_patterns):
         return False
     if any(pattern in text for pattern in positive_patterns):

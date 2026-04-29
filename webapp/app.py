@@ -284,25 +284,29 @@ def task_detail(request: Request, task_id: str):
     related_pdfs = {}
     attached_pdfs = []
     body_related_pdfs = []
+    excluded_pdf_ids = [pdf.get("pdf_id", "") for pdf in pdf_documents if pdf.get("pdf_id")]
+    other_pdfs = list_pdfs(
+        exclude_pdf_ids=excluded_pdf_ids or None,
+        limit=200,
+    )
+
     if pdf_documents:
-        other_pdfs = list_pdfs(
-            exclude_pdf_ids=[pdf.get("pdf_id", "") for pdf in pdf_documents if pdf.get("pdf_id")],
-            limit=200,
-        )
         for pdf_document in pdf_documents:
             related_pdfs[pdf_document.get("pdf_id", "")] = find_related_pdfs(
                 pdf_document,
                 other_pdfs,
                 limit=5,
             )
-        body_source_text = (mail.get("body", "") if mail else "") or task.get("raw_body", "")
-        if body_source_text.strip():
-            body_related_pdfs = find_related_pdfs_for_text(
-                body_source_text,
-                other_pdfs,
-                limit=5,
-                source_name=f"mail-body-{task.get('task_id', '')}",
-            )
+
+    body_source_text = (mail.get("body", "") if mail else "") or task.get("raw_body", "")
+    if body_source_text.strip() and other_pdfs:
+        body_related_pdfs = find_related_pdfs_for_text(
+            body_source_text,
+            other_pdfs,
+            limit=5,
+            source_name=f"mail-body-{task.get('task_id', '')}",
+        )
+
     if mail and mail.get("pdf_files"):
         pdf_by_filename = {
             pdf.get("filename", ""): pdf

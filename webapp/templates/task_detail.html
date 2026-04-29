@@ -83,13 +83,7 @@
                       <div class="d-flex flex-column gap-2">
                         {% for related in body_related_pdfs %}
                           <div class="bg-light border rounded p-2">
-                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                              <div class="fw-semibold">{{ related.filename }}</div>
-                              <span class="text-muted small">추천 점수 {{ related.related_score }}</span>
-                            </div>
-                            {% for reason in related.related_reasons %}
-                              <div class="text-muted small">{{ reason }}</div>
-                            {% endfor %}
+                            <div class="fw-semibold">{{ related.filename }}</div>
                           </div>
                         {% endfor %}
                       </div>
@@ -126,13 +120,7 @@
                             <div class="d-flex flex-column gap-2 mt-2">
                               {% for related in pdf.related %}
                                 <div class="bg-light border rounded p-2">
-                                  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                                    <div class="fw-semibold">{{ related.filename }}</div>
-                                    <span class="text-muted small">추천 점수 {{ related.related_score }}</span>
-                                  </div>
-                                  {% for reason in related.related_reasons %}
-                                    <div class="text-muted small">{{ reason }}</div>
-                                  {% endfor %}
+                                  <div class="fw-semibold">{{ related.filename }}</div>
                                 </div>
                               {% endfor %}
                             </div>

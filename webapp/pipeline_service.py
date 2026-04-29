@@ -9,6 +9,7 @@ from mail.pdf_extractor import extract_text_from_pdf
 from tasks.task_extractor import extract_tasks_from_mail
 from tasks.todo_manager_adapter import (
     load_tasks,
+    mail_has_tasks,
     mail_exists,
     save_mail,
     save_pdf_documents,
@@ -55,7 +56,9 @@ def sync_inbound() -> SyncResult:
             pdf_paths = mail_info.get("pdf_paths", [])
             received_at = mail_info.get("received_at", "")
 
-            if mail_exists(subject, sender, received_at):
+            if mail_exists(subject, sender, received_at) and mail_has_tasks(
+                subject, sender, received_at
+            ):
                 continue
 
             # 기존 파이프라인과 동일하게:
@@ -88,8 +91,9 @@ def sync_inbound() -> SyncResult:
             tasks = extract_tasks_from_mail(mail_document)
             saved_tasks = save_tasks(tasks)
             new_tasks += len(saved_tasks)
-        except Exception:
+        except Exception as error:
             # 웹에서는 “전체 동기화가 멈추는 것”보다 “부분 성공 + 실패 카운트”가 유용하다.
+            print(f"[sync_inbound] 처리 실패 | subject={mail_info.get('subject', '')} | error={error}")
             failed += 1
 
     # 유사 업무 그룹 계산은 콘솔 출력용이어서 웹 동기화 결과에서는 제외한다.

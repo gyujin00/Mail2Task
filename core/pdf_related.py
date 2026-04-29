@@ -38,10 +38,11 @@ def find_related_pdfs(
     limit: int = 5,
 ) -> list[dict]:
     """Recommend related PDFs by combining association rules and token overlap."""
+    apriori = None
     try:
         from apyori import apriori
     except ImportError:
-        return []
+        apriori = None
 
     pdfs = [source_pdf, *candidate_pdfs]
     pdf_tokens = {
@@ -56,19 +57,18 @@ def find_related_pdfs(
         return []
 
     transactions = [tokens for tokens in pdf_tokens.values() if len(tokens) >= 2]
-    if len(transactions) < 2:
-        return []
-
-    results = list(
-        apriori(
-            transactions,
-            min_support=0.1,
-            min_confidence=0.1,
-            min_lift=1.0,
-            min_length=2,
-            max_length=4,
+    results = []
+    if apriori is not None and len(transactions) >= 2:
+        results = list(
+            apriori(
+                transactions,
+                min_support=0.1,
+                min_confidence=0.1,
+                min_lift=1.0,
+                min_length=2,
+                max_length=4,
+            )
         )
-    )
 
     source_token_set = set(source_tokens)
     ranked = []
@@ -111,15 +111,16 @@ def find_related_pdfs(
                     }
                 )
 
-        if not rule_matches:
+        overlap_score = _token_overlap_score(source_token_set, candidate_tokens)
+        if not rule_matches and overlap_score <= 0:
             continue
 
         rule_matches.sort(key=lambda item: item["score"], reverse=True)
         top_rules = rule_matches[:3]
-
-        overlap_score = _token_overlap_score(source_token_set, candidate_tokens)
         rules_score = sum(item["score"] for item in top_rules)
         total_score = min(1.0, (rules_score * 2.5) + overlap_score)
+        if not top_rules:
+            total_score = min(1.0, overlap_score * 1.5)
         if total_score <= 0:
             continue
 
@@ -127,13 +128,10 @@ def find_related_pdfs(
         reasons = []
         if shared_keywords:
             reasons.append("공통 키워드: " + ", ".join(shared_keywords))
+        if not top_rules and shared_keywords:
+            reasons.append("토큰 유사도 기반 추천")
         for item in top_rules:
-            reasons.append(
-                "연관 규칙: "
-                f"support={item['support']:.3f}, "
-                f"confidence={item['confidence']:.3f}, "
-                f"lift={item['lift']:.3f}"
-            )
+            reasons.append(_format_rule_reason(item))
 
         enriched = dict(candidate)
         enriched["related_score"] = round(total_score, 3)
@@ -206,3 +204,23 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
         seen.add(value)
         result.append(value)
     return result
+
+
+def _format_rule_reason(rule: dict) -> str:
+    """Render one association rule in a user-visible, non-duplicative form."""
+    items = ", ".join(rule.get("items", [])[:4])
+    if items:
+        return (
+            "연관 규칙("
+            + items
+            + "): "
+            + f"support={rule['support']:.3f}, "
+            + f"confidence={rule['confidence']:.3f}, "
+            + f"lift={rule['lift']:.3f}"
+        )
+    return (
+        "연관 규칙: "
+        + f"support={rule['support']:.3f}, "
+        + f"confidence={rule['confidence']:.3f}, "
+        + f"lift={rule['lift']:.3f}"
+    )

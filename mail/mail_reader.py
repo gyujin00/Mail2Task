@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import email
+import html
 import imaplib
 import os
 import re
@@ -77,13 +78,51 @@ def _parse_date(date_str):
 
 
 def _extract_body(msg):
-    """Extract the plain-text body from a multipart mail message."""
-    body = ""
+    """Extract a readable text body, preferring plain text and falling back to HTML."""
+    plain_parts = []
+    html_parts = []
+
     for part in msg.walk():
-        if part.get_content_type() == "text/plain" and not part.get_filename():
-            charset = part.get_content_charset() or "utf-8"
-            body += part.get_payload(decode=True).decode(charset, errors="replace")
-    return body
+        if part.get_filename():
+            continue
+
+        content_type = part.get_content_type()
+        charset = part.get_content_charset() or "utf-8"
+        payload = part.get_payload(decode=True)
+        if payload is None:
+            continue
+
+        text = payload.decode(charset, errors="replace")
+        if content_type == "text/plain":
+            plain_parts.append(text)
+        elif content_type == "text/html":
+            html_parts.append(text)
+
+    if plain_parts:
+        return "\n".join(part.strip() for part in plain_parts if part.strip()).strip()
+
+    if html_parts:
+        return _html_to_text("\n".join(html_parts))
+
+    return ""
+
+
+def _html_to_text(raw_html):
+    """Convert common HTML mail bodies into line-oriented plain text."""
+    text = raw_html or ""
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", text)
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</p\s*>", "\n", text)
+    text = re.sub(r"(?i)</div\s*>", "\n", text)
+    text = re.sub(r"(?i)</li\s*>", "\n", text)
+    text = re.sub(r"(?i)<li\s*>", "- ", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = text.replace("\xa0", " ")
+    text = re.sub(r"\r\n?", "\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _is_target_mail(subject, body):
