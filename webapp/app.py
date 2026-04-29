@@ -11,7 +11,6 @@ from fastapi.templating import Jinja2Templates
 
 import config
 from mail_reader import fetch_target_mails
-from notifier import send_completion_notice
 from stats import get_stats
 from todo_manager_adapter import update_status
 
@@ -282,7 +281,7 @@ def task_complete(request: Request, task_id: str):
     """
     완료 처리:
     1) tasks.status를 '완료'로 변경
-    2) 기존 notifier 로직으로 발신자에게 완료 알림 메일 발송
+    2) 기존 outbound(완료 알림 발송) 파이프라인을 재사용해 메일 발송
     3) 발송 성공 시 tasks.notified=True로 마킹(중복 발송 방지)
     """
     task = get_task(task_id)
@@ -296,12 +295,18 @@ def task_complete(request: Request, task_id: str):
 
     try:
         update_status(task_id, status="완료")
-        # 완료 알림 메일 발송(기존 notifier 재사용)
-        ok = send_completion_notice(task)
-        if ok:
-            update_status(task_id, notified=True)
-            return RedirectResponse(url=f"/tasks/{task_id}?done=1", status_code=303)
-        return RedirectResponse(url=f"/tasks/{task_id}?done=0", status_code=303)
+        # dev 쪽의 “완료 알림 발송” 로직(필터/데이터 모양/전송 조건)이 계속 바뀔 수 있으므로,
+        # 웹에서는 status만 바꾼 뒤 메인 outbound 파이프라인을 그대로 호출한다.
+        #
+        # - 이 함수는 완료 + 미통지(notified=False) 태스크를 찾아 notifier로 메일을 보낸다.
+        # - 성공 시 tasks.notified=True로 업데이트한다.
+        from main import run_outbound_pipeline
+
+        run_outbound_pipeline()
+
+        updated = get_task(task_id)
+        done = bool(updated and updated.get("notified") is True)
+        return RedirectResponse(url=f"/tasks/{task_id}?done={1 if done else 0}", status_code=303)
     except Exception as e:
         return templates.TemplateResponse(
             request,
