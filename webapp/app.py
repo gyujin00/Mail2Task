@@ -23,7 +23,7 @@ from .env_service import (
     upsert_env_values,
 )
 from .pipeline_service import sync_inbound
-from .repositories import get_mail, get_task, list_tasks
+from .repositories import get_mail, get_task, list_tasks, refresh_task_summary
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -283,6 +283,7 @@ def task_detail(request: Request, task_id: str):
             status_code=404,
         )
     mail = get_mail(task.get("mail_id", "")) if task.get("mail_id") else None
+    task = refresh_task_summary(task, mail)
     return templates.TemplateResponse(
         request,
         "task_detail.html",
