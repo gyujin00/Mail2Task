@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% set title = "To-do 리스트" %}
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+              <div class="h6 mb-0">메일 기반 업무(Task) 목록</div>
+              <div class="text-muted small">필터/검색/정렬은 tasks 컬렉션 기준으로 동작합니다.</div>
+            </div>
+            <div class="text-muted small">총 {{ tasks | length }}건</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <form class="row g-2 align-items-end mb-3" method="get" action="/tasks">
+            <div class="col-12 col-lg-3">
+              <label class="form-label small">검색</label>
+              <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="업무명/제목/발신자/요약..." />
+            </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label small">상태</label>
+              <select class="form-select" name="status">
+                <option value="">전체</option>
+                {% for v in options.statuses %}
+                  <option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label small">긴급도</label>
+              <select class="form-select" name="urgency">
+                <option value="">전체</option>
+                {% for v in options.urgencies %}
+                  <option value="{{ v }}" {% if urgency == v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label small">업무유형</label>
+              <select class="form-select" name="task_type">
+                <option value="">전체</option>
+                {% for v in options.types %}
+                  <option value="{{ v }}" {% if task_type == v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label small">말머리</label>
+              <select class="form-select" name="category">
+                <option value="">전체</option>
+                {% for v in options.categories %}
+                  <option value="{{ v }}" {% if category == v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-lg-1">
+              <label class="form-label small">정렬</label>
+              <select class="form-select" name="sort">
+                <option value="latest" {% if sort == "latest" %}selected{% endif %}>최신순</option>
+                <option value="deadline" {% if sort == "deadline" %}selected{% endif %}>마감일순</option>
+                <option value="urgency" {% if sort == "urgency" %}selected{% endif %}>긴급도순</option>
+              </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-primary" type="submit">적용</button>
+              <a class="btn btn-outline-secondary" href="/tasks">초기화</a>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr class="small text-muted">
+                  <th>업무명</th>
+                  <th>말머리</th>
+                  <th>업무유형</th>
+                  <th class="text-center">긴급도</th>
+                  <th>마감일</th>
+                  <th>발신자</th>
+                  <th>상태</th>
+                  <th class="text-center">PDF</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in tasks %}
+                  <tr>
+                    <td class="fw-semibold">
+                      <a href="/tasks/{{ t.task_id }}" class="link-dark text-decoration-none">
+                        {{ t.title or t.subject }}
+                      </a>
+                      <div class="text-muted small">
+                        {{ t.received_at }}
+                      </div>
+                    </td>
+                    <td>{{ t.mail_category or "미분류" }}</td>
+                    <td>{{ t.task_type or "미분류" }}</td>
+                    <td class="text-center">
+                      {% set u = t.urgency_level or "미분류" %}
+                      <span class="badge {% if u=='긴급' %}text-bg-danger{% elif u=='보통' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">
+                        {{ u }} {{ t.urgency_score }}
+                      </span>
+                    </td>
+                    <td>
+                      <div>{{ t.deadline_date or "미정" }}</div>
+                      <div class="text-muted small">{{ t.deadline_time or "" }}</div>
+                    </td>
+                    <td class="small">{{ t.sender }}</td>
+                    <td>
+                      <span class="badge {% if t.status=='완료' %}text-bg-success{% else %}text-bg-primary{% endif %}">
+                        {{ t.status or "미분류" }}
+                      </span>
+                    </td>
+                    <td class="text-center">
+                      {% if t.has_pdf %}
+                        <span class="badge text-bg-info">Y</span>
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+                {% if tasks|length == 0 %}
+                  <tr>
+                    <td colspan="8" class="text-center text-muted py-5">조건에 맞는 업무가 없습니다.</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

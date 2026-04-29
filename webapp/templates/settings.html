@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% set title = "설정" %}
+{% block content %}
+  <div class="row g-4">
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="h5 mb-0">Gmail 연동 설정</div>
+              <div class="text-muted small">Gmail 앱 비밀번호를 사용하세요.</div>
+            </div>
+            <div class="badge text-bg-secondary">로그인 없음</div>
+          </div>
+        </div>
+        <div class="card-body">
+          {% if message %}
+            <div class="alert alert-success">{{ message }}</div>
+          {% endif %}
+          {% if error %}
+            <div class="alert alert-danger">{{ error }}</div>
+          {% endif %}
+
+          <form method="post" action="/settings/save" class="vstack gap-3">
+            <div>
+              <label class="form-label">Gmail 주소</label>
+              <input class="form-control" type="email" name="email" value="{{ email }}" placeholder="name@company.com" required />
+              <div class="form-text">
+                현재 상태:
+                {% if email %}
+                  <span class="fw-semibold text-success">설정됨</span>
+                {% else %}
+                  <span class="fw-semibold text-danger">미설정</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div>
+              <label class="form-label">Gmail 앱 비밀번호</label>
+              <input class="form-control" type="password" name="app_password" value="" placeholder="(새 비밀번호 입력 시에만 변경)" />
+              <div class="form-text">
+                {% if has_password %}
+                  현재 상태: <span class="fw-semibold text-success">설정됨</span>
+                  <span class="text-muted">(마스킹: {{ masked_password }})</span>
+                {% else %}
+                  현재 상태: <span class="fw-semibold text-danger">미설정</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary" type="submit">저장</button>
+              <button class="btn btn-outline-secondary" type="submit" formaction="/settings/test">메일 연결 테스트</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <div class="h6 mb-0">안내</div>
+        </div>
+        <div class="card-body small text-muted">
+          <ul class="mb-0">
+            <li>설정 값은 프로젝트 루트의 <code>.env</code>에 <code>TASK_EMAIL</code>, <code>TASK_PASSWORD</code>로 저장됩니다.</li>
+            <li>보안상 비밀번호는 화면에 다시 표시하지 않습니다(마스킹 상태만 표시).</li>
+            <li>메일 동기화는 상단의 <b>메일 새로 불러오기</b> 버튼으로 실행합니다.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
