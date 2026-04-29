@@ -76,6 +76,27 @@
                   <div class="mb-2"><b>메일 제목</b>: {{ task.subject }}</div>
                   <div class="mb-2"><b>메일 본문</b></div>
                   <pre class="prebox">{{ (mail.body if mail else task.raw_body) or "" }}</pre>
+
+                  <div class="mt-3">
+                    <div class="small text-muted mb-2">메일 본문 기반 연관 PDF 추천</div>
+                    {% if body_related_pdfs and (body_related_pdfs | length) > 0 %}
+                      <div class="d-flex flex-column gap-2">
+                        {% for related in body_related_pdfs %}
+                          <div class="bg-light border rounded p-2">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                              <div class="fw-semibold">{{ related.filename }}</div>
+                              <span class="text-muted small">추천 점수 {{ related.related_score }}</span>
+                            </div>
+                            {% for reason in related.related_reasons %}
+                              <div class="text-muted small">{{ reason }}</div>
+                            {% endfor %}
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <div class="text-muted small">본문 내용과 연결된 추천 PDF가 없습니다.</div>
+                    {% endif %}
+                  </div>
                 </div>
               </div>
             </div>
@@ -87,14 +108,40 @@
               </h2>
               <div id="collapsePdf" class="accordion-collapse collapse" data-bs-parent="#accDetail">
                 <div class="accordion-body">
-                  {% if mail and mail.pdf_files and (mail.pdf_files | length) > 0 %}
-                    <ul class="mb-0">
-                      {% for f in mail.pdf_files %}
-                        <li class="mb-1">
-                          <a href="/downloads/{{ mail.mail_id }}/{{ f.filename }}" class="link-primary">{{ f.filename }}</a>
-                        </li>
+                  {% if attached_pdfs and (attached_pdfs | length) > 0 %}
+                    <div class="d-flex flex-column gap-3">
+                      {% for pdf in attached_pdfs %}
+                        <div class="border rounded p-3">
+                          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <a href="/downloads/{{ mail.mail_id }}/{{ pdf.filename }}" class="link-primary fw-semibold">{{ pdf.filename }}</a>
+                            {% if pdf.related %}
+                              <span class="badge text-bg-info">추천 {{ pdf.related | length }}건</span>
+                            {% else %}
+                              <span class="badge text-bg-secondary">추천 없음</span>
+                            {% endif %}
+                          </div>
+
+                          {% if pdf.related %}
+                            <div class="small text-muted mt-2">연관 PDF 추천</div>
+                            <div class="d-flex flex-column gap-2 mt-2">
+                              {% for related in pdf.related %}
+                                <div class="bg-light border rounded p-2">
+                                  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                    <div class="fw-semibold">{{ related.filename }}</div>
+                                    <span class="text-muted small">추천 점수 {{ related.related_score }}</span>
+                                  </div>
+                                  {% for reason in related.related_reasons %}
+                                    <div class="text-muted small">{{ reason }}</div>
+                                  {% endfor %}
+                                </div>
+                              {% endfor %}
+                            </div>
+                          {% else %}
+                            <div class="text-muted small mt-2">현재 저장된 다른 PDF 중에서 연관 추천 결과가 없습니다.</div>
+                          {% endif %}
+                        </div>
                       {% endfor %}
-                    </ul>
+                    </div>
                   {% elif task.has_pdf %}
                     <div class="text-muted">첨부 PDF 정보는 있으나 메일 문서에 다운로드 목록이 없습니다.</div>
                   {% else %}

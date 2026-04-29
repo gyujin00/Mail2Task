@@ -8,7 +8,7 @@ except ModuleNotFoundError:
     from _bootstrap import ROOT_DIR
 
 from mail.pdf_extractor import extract_text_from_pdf
-from storage.mongo_task_store import save_mail
+from storage.mongo_task_store import save_mail, save_pdf_documents
 from tasks.task_extractor import extract_tasks_from_mail
 
 
@@ -54,6 +54,11 @@ def test_pdf_pipeline() -> None:
     print(f"  mail_id: {saved_mail['mail_id']}")
     print(f"  has_pdf: {saved_mail['has_pdf']}")
     print(f"  pdf_count: {saved_mail['pdf_count']}")
+
+    pdf_documents = save_pdf_documents(saved_mail)
+    print(f"  pdf_documents: {len(pdf_documents)}")
+    if pdf_documents:
+        print(f"  pdf_keywords: {pdf_documents[0].get('keywords', [])[:10]}")
 
     print("\n[5/5] Extracting tasks")
     tasks = extract_tasks_from_mail(saved_mail)

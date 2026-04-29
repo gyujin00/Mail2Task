@@ -42,6 +42,7 @@ MONGODB_URI = os.environ.get(
 )
 MONGODB_DB = os.environ.get("MONGODB_DB", "mail2task")
 MONGODB_MAILS_COLLECTION = os.environ.get("MONGODB_MAILS_COLLECTION", "mails")
+MONGODB_PDFS_COLLECTION = os.environ.get("MONGODB_PDFS_COLLECTION", "pdf_documents")
 MONGODB_TASKS_COLLECTION = os.environ.get(
     "MONGODB_TASKS_COLLECTION",
     os.environ.get("MONGODB_COLLECTION", "tasks"),

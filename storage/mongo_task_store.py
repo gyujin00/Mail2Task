@@ -14,6 +14,7 @@ from datetime import datetime
 from pymongo import DESCENDING, MongoClient
 
 from core import config
+from core.pdf_keywords import extract_pdf_keywords
 
 
 _client = None
@@ -35,6 +36,7 @@ def save_mail(mail):
         mail.get("received_at", ""),
     )
     pdf_files = mail.get("pdf_files", [])
+    pdf_ids = [_make_pdf_id(mail_id, file.get("filename", ""), index) for index, file in enumerate(pdf_files, start=1)]
     document = {
         "mail_id": mail_id,
         "subject": mail.get("subject", ""),
@@ -45,6 +47,7 @@ def save_mail(mail):
         "received_at": mail.get("received_at", ""),
         "body": mail.get("body", ""),
         "pdf_files": pdf_files,
+        "pdf_ids": pdf_ids,
         "pdf_paths": [file.get("path", "") for file in pdf_files if file.get("path")],
         "has_pdf": bool(pdf_files),
         "pdf_count": len(pdf_files),
@@ -54,6 +57,44 @@ def save_mail(mail):
 
     collection.replace_one({"mail_id": mail_id}, document, upsert=True)
     return document
+
+
+def save_pdf_documents(mail):
+    """메일에 포함된 PDF 원문을 pdf_documents 컬렉션에 저장한다."""
+    pdf_files = mail.get("pdf_files", [])
+    if not pdf_files:
+        return []
+
+    collection = _get_pdf_collection()
+    mail_id = mail.get("mail_id", "")
+    task_ids = mail.get("task_ids", [])
+    now_text = _now_iso()
+    saved_documents = []
+
+    for index, pdf_file in enumerate(pdf_files, start=1):
+        filename = pdf_file.get("filename", "")
+        path = pdf_file.get("path", "")
+        text = pdf_file.get("text", "")
+        keywords = pdf_file.get("keywords") or extract_pdf_keywords(text, filename=filename)
+        pdf_id = pdf_file.get("pdf_id") or _make_pdf_id(mail_id, filename, index)
+
+        document = {
+            "pdf_id": pdf_id,
+            "mail_id": mail_id,
+            "task_ids": list(task_ids),
+            "filename": filename,
+            "path": path,
+            "text": text,
+            "keywords": keywords,
+            "keyword_count": len(keywords),
+            "created_at": pdf_file.get("created_at") or now_text,
+            "updated_at": now_text,
+        }
+
+        collection.replace_one({"pdf_id": pdf_id}, document, upsert=True)
+        saved_documents.append(document)
+
+    return saved_documents
 
 
 def save_tasks(tasks):
@@ -229,6 +270,16 @@ def _get_task_collection():
     return collection
 
 
+def _get_pdf_collection():
+    """MongoDB pdf_documents 컬렉션을 반환하고 필요한 인덱스를 보장한다."""
+    client = _get_client()
+    collection = client[config.MONGODB_DB][config.MONGODB_PDFS_COLLECTION]
+    collection.create_index("pdf_id", unique=True)
+    collection.create_index("mail_id")
+    collection.create_index("filename")
+    return collection
+
+
 def _get_client():
     """MongoDB 클라이언트를 재사용한다."""
     global _client
@@ -255,6 +306,12 @@ def _make_mail_id(subject, sender, received_at):
 def _make_task_id(mail_id, title, task_order):
     """메일 ID와 업무 순서를 기준으로 안정적인 Task ID를 만든다."""
     raw = f"{mail_id}_{task_order}_{title}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _make_pdf_id(mail_id, filename, pdf_order):
+    """메일 ID와 첨부 순서를 기준으로 안정적인 PDF ID를 만든다."""
+    raw = f"{mail_id}_{pdf_order}_{filename}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
 

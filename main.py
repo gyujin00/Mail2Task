@@ -26,6 +26,7 @@ from tasks.todo_manager_adapter import (
     load_tasks,
     mail_exists,
     save_mail,
+    save_pdf_documents,
     save_tasks,
     update_status,
 )
@@ -72,6 +73,9 @@ def run_inbound_pipeline():
                 "pdf_files": pdf_files,
             }
         )
+        pdf_documents = save_pdf_documents(mail_document)
+        if pdf_documents:
+            mail_document["pdf_ids"] = [doc["pdf_id"] for doc in pdf_documents]
         tasks = extract_tasks_from_mail(mail_document)
         saved_tasks = save_tasks(tasks)
 

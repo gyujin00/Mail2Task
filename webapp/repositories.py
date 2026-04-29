@@ -21,6 +21,19 @@ def get_mail(mail_id: str) -> dict[str, Any] | None:
     return database.fetch_mail(mail_id)
 
 
+def list_pdfs_by_mail(mail_id: str) -> list[dict[str, Any]]:
+    """mail_id에 연결된 PDF 문서 목록 조회."""
+    return database.fetch_pdfs_by_mail(mail_id)
+
+
+def list_pdfs(
+    exclude_pdf_ids: list[str] | None = None,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """PDF 문서 목록 조회."""
+    return database.fetch_pdfs(exclude_pdf_ids=exclude_pdf_ids, limit=limit)
+
+
 def refresh_task_summary(
     task: dict[str, Any],
     mail: dict[str, Any] | None = None,

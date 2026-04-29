@@ -33,6 +33,15 @@ def get_task_collection():
     return collection
 
 
+def get_pdf_collection():
+    """Return the `pdf_documents` collection used for related-PDF lookups."""
+    client = _get_client()
+    collection = client[config.MONGODB_DB][config.MONGODB_PDFS_COLLECTION]
+    collection.create_index("pdf_id", unique=True)
+    collection.create_index("mail_id")
+    return collection
+
+
 def upsert_mail(mail_id, document):
     """Insert or replace a mail document by `mail_id`."""
     get_mail_collection().replace_one({"mail_id": mail_id}, document, upsert=True)
@@ -41,6 +50,11 @@ def upsert_mail(mail_id, document):
 def upsert_task(task_id, document):
     """Insert or replace a task document by `task_id`."""
     get_task_collection().replace_one({"task_id": task_id}, document, upsert=True)
+
+
+def upsert_pdf(pdf_id, document):
+    """Insert or replace a PDF document by `pdf_id`."""
+    get_pdf_collection().replace_one({"pdf_id": pdf_id}, document, upsert=True)
 
 
 def fetch_tasks():
@@ -56,6 +70,24 @@ def fetch_task(task_id: str):
 def fetch_mail(mail_id: str):
     """Fetch a single source mail document for the detail page."""
     return get_mail_collection().find_one({"mail_id": mail_id}, {"_id": 0})
+
+
+def fetch_pdf(pdf_id: str):
+    """Fetch a single stored PDF document."""
+    return get_pdf_collection().find_one({"pdf_id": pdf_id}, {"_id": 0})
+
+
+def fetch_pdfs_by_mail(mail_id: str):
+    """Fetch all stored PDF documents that belong to one mail."""
+    return list(get_pdf_collection().find({"mail_id": mail_id}, {"_id": 0}))
+
+
+def fetch_pdfs(exclude_pdf_ids=None, limit: int = 200):
+    """Fetch stored PDF documents, optionally excluding a subset by id."""
+    query = {}
+    if exclude_pdf_ids:
+        query["pdf_id"] = {"$nin": list(exclude_pdf_ids)}
+    return list(get_pdf_collection().find(query, {"_id": 0}).limit(limit))
 
 
 def update_task(task_id, updates):
