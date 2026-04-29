@@ -27,10 +27,15 @@
 #   긴급도:   긴급(80점) | 마감: 2026-05-02
 # ============================================================
 
+import shutil
+import uuid
+from email.message import EmailMessage
+from pathlib import Path
+
 import config
 from classifier import score_urgency
 from deadline_parser import parse_deadline
-from mail_reader import fetch_target_mails
+from mail_reader import _download_pdfs, _is_target_mail, fetch_target_mails
 
 
 def main():
@@ -69,6 +74,47 @@ def main():
         print(f"긴급도:        {level} ({score}) | 마감일: {deadline}")
 
     return 0
+
+
+def test_pdf_filename_collision():
+    """동일한 PDF 첨부파일명이 들어와도 덮어쓰지 않고 저장되는지 확인한다."""
+    temp_dir = Path("downloads") / f"_mail_reader_collision_test_{uuid.uuid4().hex}"
+    original_save_dir = config.SAVE_DIR
+
+    try:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        config.SAVE_DIR = str(temp_dir)
+
+        paths = []
+        for content in (b"first", b"second", b"third"):
+            msg = EmailMessage()
+            msg.add_attachment(
+                content,
+                maintype="application",
+                subtype="pdf",
+                filename="report.pdf",
+            )
+            paths.extend(_download_pdfs(msg))
+
+        names = [Path(path).name for path in paths]
+        expected = ["report.pdf", "report (2).pdf", "report (3).pdf"]
+
+        print("\n[Collision Test]")
+        print(f"saved:    {names}")
+        print(f"expected: {expected}")
+
+        return 0 if names == expected else 1
+    finally:
+        config.SAVE_DIR = original_save_dir
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_target_mail_detection():
+    """브래킷 없는 메일도 업무성 키워드가 있으면 수집 대상으로 인정한다."""
+    assert _is_target_mail("[업무요청] 디자인 검토", "")
+    assert _is_target_mail("디자인 검토 요청", "이번 주 마감입니다.")
+    assert not _is_target_mail("점심 메뉴 투표", "오늘 뭐 먹을까요?")
 
 
 if __name__ == "__main__":

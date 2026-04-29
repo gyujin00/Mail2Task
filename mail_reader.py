@@ -9,6 +9,7 @@ from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 import os
 import re
+from pathlib import Path
 import config
 
 
@@ -39,12 +40,12 @@ def fetch_target_mails():
         msg = email.message_from_bytes(data[0][1])
 
         subject = _decode_str(msg["Subject"])
-        if not re.search(config.SUBJECT_PATTERN, subject):
-            continue
-
         sender = parseaddr(msg["From"])[1]
         received_at = _parse_date(msg["Date"])
         body = _extract_body(msg)
+        if not _is_target_mail(subject, body):
+            continue
+
         pdf_paths = _download_pdfs(msg)
 
         results.append({
@@ -88,6 +89,24 @@ def _extract_body(msg):
     return body
 
 
+def _is_target_mail(subject, body):
+    """제목 패턴이 맞거나 업무성 키워드가 있으면 수집 대상으로 본다."""
+    if re.search(config.SUBJECT_PATTERN, subject or ""):
+        return True
+
+    text = "\n".join(part for part in [subject, body] if part).lower()
+    task_keywords = (
+        "업무",
+        "과업",
+        "요청",
+        "마감",
+        "task",
+        "todo",
+        "deadline",
+    )
+    return any(keyword in text for keyword in task_keywords)
+
+
 def _download_pdfs(msg):
     """msg에서 PDF 첨부파일을 downloads/ 폴더에 저장하고 경로 목록을 반환한다."""
     pdf_paths = []
@@ -103,9 +122,26 @@ def _download_pdfs(msg):
         if not filename.lower().endswith(".pdf"):
             continue
 
-        filepath = os.path.join(config.SAVE_DIR, filename)
+        filepath = _build_unique_pdf_path(filename)
         with open(filepath, "wb") as f:
             f.write(part.get_payload(decode=True))
         pdf_paths.append(filepath)
 
     return pdf_paths
+
+
+def _build_unique_pdf_path(filename):
+    """동일 파일명이 있으면 숫자 suffix를 붙여 유일한 저장 경로를 만든다."""
+    candidate = Path(config.SAVE_DIR) / filename
+    if not candidate.exists():
+        return str(candidate)
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    index = 2
+
+    while True:
+        renamed = candidate.with_name(f"{stem} ({index}){suffix}")
+        if not renamed.exists():
+            return str(renamed)
+        index += 1
