@@ -93,10 +93,13 @@ def test_pdf_filename_collision() -> int:
 
 
 def test_target_mail_detection() -> None:
-    """Completion notices should be excluded while task mail is still detected."""
+    """Only allowed bracket tags should pass the inbound mail filter."""
     assert _is_target_mail("[업무요청] 로고 수정 검토", "")
-    assert _is_target_mail("디자인 검토 요청", "이번 주 마감입니다.")
+    assert _is_target_mail("[자료공유] 프로젝트 관련 기술 문서", "")
+    assert _is_target_mail("[긴급] 서버 점검 요청", "")
+    assert not _is_target_mail("디자인 검토 요청", "이번 주 마감입니다.")
     assert not _is_target_mail("[완료] package regroup verify", "완료 메일입니다.")
+    assert not _is_target_mail("[보안] 계정 점검", "")
     assert not _is_target_mail("점심 메뉴 투표", "오늘 뭐 먹을까요?")
 
 

@@ -119,8 +119,21 @@ def settings_save(
 
 
 @app.post("/settings/test", response_class=HTMLResponse)
-def settings_test(request: Request):
+def settings_test(
+    request: Request,
+    email: str = Form(""),
+    app_password: str = Form(""),
+):
     try:
+        email = (email or "").strip()
+        app_password = (app_password or "").strip()
+
+        if email:
+            values = {"TASK_EMAIL": email}
+            if app_password:
+                values["TASK_PASSWORD"] = app_password
+            upsert_env_values(values)
+
         reload_runtime_config()
         if not config.EMAIL or not config.PASSWORD:
             raise RuntimeError("메일 계정 정보가 설정되지 않았습니다.")

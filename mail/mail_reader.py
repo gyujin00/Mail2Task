@@ -87,25 +87,19 @@ def _extract_body(msg):
 
 
 def _is_target_mail(subject, body):
-    """Treat bracketed work mail as inbound tasks, except completion notices."""
-    normalized_subject = (subject or "").strip().lower()
-    if normalized_subject.startswith("[완료]"):
+    """Allow only configured bracket tags for inbound task mail."""
+    del body
+
+    normalized_subject = (subject or "").strip()
+    if normalized_subject.lower().startswith("[완료]"):
         return False
 
-    if re.search(config.SUBJECT_PATTERN, subject or ""):
-        return True
+    match = re.match(config.SUBJECT_PATTERN, normalized_subject)
+    if not match:
+        return False
 
-    text = "\n".join(part for part in [subject, body] if part).lower()
-    task_keywords = (
-        "업무",
-        "과업",
-        "요청",
-        "마감",
-        "task",
-        "todo",
-        "deadline",
-    )
-    return any(keyword in text for keyword in task_keywords)
+    category = match.group(0).strip("[]").strip()
+    return category in set(config.ALLOWED_MAIL_TAGS)
 
 
 def _download_pdfs(msg):

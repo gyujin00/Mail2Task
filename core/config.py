@@ -75,6 +75,14 @@ CSV_COLUMNS = [
 
 # 메일 필터: 제목이 [카테고리] 형태로 시작하는 메일만 수집
 SUBJECT_PATTERN = r"^\[.+\]"
+ALLOWED_MAIL_TAGS = [
+    tag.strip()
+    for tag in os.environ.get(
+        "ALLOWED_MAIL_TAGS",
+        "업무요청,업무협조,긴급,자료공유,루틴,운영,기획",
+    ).split(",")
+    if tag.strip()
+]
 
 # 업무 유형 후보
 TASK_TYPES = ["프로젝트", "루틴", "행정", "기타"]
