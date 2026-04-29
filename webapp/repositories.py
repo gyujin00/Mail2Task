@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import database
-from summarizer import summarize
+from core.summarizer import summarize
+from storage import database
 
 
 def list_tasks() -> list[dict[str, Any]]:

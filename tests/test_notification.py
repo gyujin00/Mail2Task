@@ -7,8 +7,8 @@ except ModuleNotFoundError:
 
 del ROOT_DIR
 
-from mongo_task_store import get_completed_unnotified, save_tasks, update_status
-from notifier import send_completion_notice
+from mail.notifier import send_completion_notice
+from storage.mongo_task_store import get_completed_unnotified, save_tasks, update_status
 
 
 def create_test_tasks():

@@ -13,7 +13,7 @@ from datetime import datetime
 
 from pymongo import DESCENDING, MongoClient
 
-import config
+from core import config
 
 
 _client = None

@@ -8,11 +8,11 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-import config
-from mail_reader import fetch_target_mails
-from notifier import send_completion_notice
-from stats import get_stats
-from todo_manager_adapter import update_status
+from core import config
+from mail.mail_reader import fetch_target_mails
+from mail.notifier import send_completion_notice
+from monitoring.stats import get_stats
+from tasks.todo_manager_adapter import update_status
 
 from .env_service import (
     EnvStatus,

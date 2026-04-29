@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import config
-from mail_reader import fetch_target_mails
-from pdf_extractor import extract_text_from_pdf
-from task_extractor import extract_tasks_from_mail
-from todo_manager_adapter import load_tasks, mail_exists, save_mail, save_tasks
+from core import config
+from mail.mail_reader import fetch_target_mails
+from mail.pdf_extractor import extract_text_from_pdf
+from tasks.task_extractor import extract_tasks_from_mail
+from tasks.todo_manager_adapter import load_tasks, mail_exists, save_mail, save_tasks
 
 
 @dataclass(frozen=True)

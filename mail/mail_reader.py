@@ -10,7 +10,7 @@ from email.utils import parseaddr, parsedate_to_datetime
 import os
 import re
 from pathlib import Path
-import config
+from core import config
 
 
 def fetch_target_mails():

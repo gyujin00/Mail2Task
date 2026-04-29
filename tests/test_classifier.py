@@ -7,7 +7,7 @@ except ModuleNotFoundError:
 
 del ROOT_DIR
 
-from classifier import group_similar_tasks, is_duplicate, score_urgency
+from core.classifier import group_similar_tasks, is_duplicate, score_urgency
 
 
 def test_group_similar_tasks() -> None:

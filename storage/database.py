@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pymongo import DESCENDING, MongoClient
 
-import config
+from core import config
 
 
 _client = None

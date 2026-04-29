@@ -2,7 +2,8 @@ import os
 from pathlib import Path
 
 
-BASE_DIR = Path(__file__).resolve().parent
+PACKAGE_DIR = Path(__file__).resolve().parent
+BASE_DIR = PACKAGE_DIR.parent
 
 
 def _load_dotenv():

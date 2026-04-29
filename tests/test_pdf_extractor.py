@@ -8,7 +8,7 @@ try:
 except ModuleNotFoundError:
     from _bootstrap import ROOT_DIR
 
-from pdf_extractor import extract_text_from_pdf
+from mail.pdf_extractor import extract_text_from_pdf
 
 
 def create_sample_pdf() -> Path | None:

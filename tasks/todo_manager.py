@@ -4,11 +4,11 @@ import hashlib
 import re
 from datetime import datetime
 
-import config
-import database
+from core import config
+from storage import database
 
 try:
-    from todo_analyzer import TodoAnalyzer
+    from tasks.todo_analyzer import TodoAnalyzer
 except Exception:  # pragma: no cover - 선택 의존성/모델 미설치 fallback
     TodoAnalyzer = None
 

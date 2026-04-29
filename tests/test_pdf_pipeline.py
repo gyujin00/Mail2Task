@@ -7,9 +7,9 @@ try:
 except ModuleNotFoundError:
     from _bootstrap import ROOT_DIR
 
-from mongo_task_store import save_mail
-from pdf_extractor import extract_text_from_pdf
-from task_extractor import extract_tasks_from_mail
+from mail.pdf_extractor import extract_text_from_pdf
+from storage.mongo_task_store import save_mail
+from tasks.task_extractor import extract_tasks_from_mail
 
 
 def test_pdf_pipeline() -> None:

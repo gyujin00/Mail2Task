@@ -10,7 +10,7 @@ except ModuleNotFoundError:
 del ROOT_DIR
 
 try:
-    from todo_analyzer import TodoAnalyzer
+    from tasks.todo_analyzer import TodoAnalyzer
 except ModuleNotFoundError as exc:
     TodoAnalyzer = None
     IMPORT_ERROR = exc

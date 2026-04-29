@@ -10,10 +10,10 @@ try:
 except ModuleNotFoundError:
     from _bootstrap import ROOT_DIR
 
-import config
-from classifier import score_urgency
-from deadline_parser import parse_deadline
-from mail_reader import _download_pdfs, _is_target_mail, fetch_target_mails
+from core import config
+from core.classifier import score_urgency
+from core.deadline_parser import parse_deadline
+from mail.mail_reader import _download_pdfs, _is_target_mail, fetch_target_mails
 
 
 def _safe_console_text(value: str) -> str:
