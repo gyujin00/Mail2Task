@@ -40,12 +40,12 @@ def fetch_target_mails():
         msg = email.message_from_bytes(data[0][1])
 
         subject = _decode_str(msg["Subject"])
-        if not re.search(config.SUBJECT_PATTERN, subject):
-            continue
-
         sender = parseaddr(msg["From"])[1]
         received_at = _parse_date(msg["Date"])
         body = _extract_body(msg)
+        if not _is_target_mail(subject, body):
+            continue
+
         pdf_paths = _download_pdfs(msg)
 
         results.append({
@@ -87,6 +87,24 @@ def _extract_body(msg):
             charset = part.get_content_charset() or "utf-8"
             body += part.get_payload(decode=True).decode(charset, errors="replace")
     return body
+
+
+def _is_target_mail(subject, body):
+    """제목 패턴이 맞거나 업무성 키워드가 있으면 수집 대상으로 본다."""
+    if re.search(config.SUBJECT_PATTERN, subject or ""):
+        return True
+
+    text = "\n".join(part for part in [subject, body] if part).lower()
+    task_keywords = (
+        "업무",
+        "과업",
+        "요청",
+        "마감",
+        "task",
+        "todo",
+        "deadline",
+    )
+    return any(keyword in text for keyword in task_keywords)
 
 
 def _download_pdfs(msg):
