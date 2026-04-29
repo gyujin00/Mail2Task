@@ -7,7 +7,13 @@ import config
 from mail_reader import fetch_target_mails
 from pdf_extractor import extract_text_from_pdf
 from task_extractor import extract_tasks_from_mail
-from todo_manager_adapter import load_tasks, mail_exists, save_mail, save_tasks
+from todo_manager_adapter import (
+    load_tasks,
+    mail_exists,
+    save_mail,
+    save_pdf_documents,
+    save_tasks,
+)
 
 
 @dataclass(frozen=True)
@@ -73,6 +79,9 @@ def sync_inbound() -> SyncResult:
                     "pdf_files": pdf_files,
                 }
             )
+            pdf_documents = save_pdf_documents(mail_document)
+            if pdf_documents:
+                mail_document["pdf_ids"] = [doc["pdf_id"] for doc in pdf_documents]
             new_mails += 1
 
             # 메일 1건에서 Task가 여러 개 나올 수 있으므로 리스트로 저장한다.
