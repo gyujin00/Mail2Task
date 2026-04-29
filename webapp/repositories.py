@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
-import database
-from summarizer import summarize
+from core.summarizer import summarize
+from storage import database
 
 
 def list_tasks() -> list[dict[str, Any]]:
-    """tasks 컬렉션에서 화면 표시용 문서를 조회한다."""
+    """Return the task documents shown in the web list view."""
     return database.fetch_tasks()
 
 
 def get_task(task_id: str) -> dict[str, Any] | None:
-    """task_id(id 포함)로 단건 조회."""
+    """Fetch a task by either its legacy `id` or current `task_id`."""
     return database.fetch_task(task_id)
 
 
 def get_mail(mail_id: str) -> dict[str, Any] | None:
-    """mail_id로 mails 컬렉션 단건 조회."""
+    """Fetch the source mail document for the detail page."""
     return database.fetch_mail(mail_id)
 
 
@@ -38,7 +38,7 @@ def refresh_task_summary(
     task: dict[str, Any],
     mail: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Regenerate old verbose summaries into a short detail-view summary."""
+    """Regenerate older verbose summaries into the short detail-view format."""
     if not task or not _needs_summary_refresh(task.get("summary", "")):
         return task
 
@@ -48,7 +48,7 @@ def refresh_task_summary(
         for file in ((mail or {}).get("pdf_files") or [])
         if file.get("text")
     )
-    source_text = "\n".join(part for part in [body, pdf_text] if part)
+    source_text = "\n".join(part for part in (body, pdf_text) if part)
     source_text = source_text or task.get("source_text") or task.get("subject", "")
 
     refreshed = summarize(
@@ -73,13 +73,8 @@ def refresh_task_summary(
     return updated
 
 
-def set_task_status_completed(task_id: str) -> None:
-    """업무 완료 처리."""
-    database.update_task(task_id, {"status": "완료"})
-
-
 def _needs_summary_refresh(summary: str) -> bool:
-    """Refresh summaries that are empty or still stored in the old verbose format."""
+    """Detect summaries that still use the old single-line verbose format."""
     normalized = " ".join((summary or "").split())
     if not normalized:
         return True
