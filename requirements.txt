@@ -1,14 +1,10 @@
-# 사용되는 패키지 모두 install하기.
-# cd Mail2Task
-# pip install -r requirements.txt
-#----------------------------------------------------------------
-# Task-Harvester 필수 패키지
-
-# PDF 텍스트 추출 (pdf_extractor.py)
 pdfplumber>=0.10.0
 
-# MongoDB 연동 (todo_manager.py / stats.py)
 pymongo>=4.8.0
 
-# OpenAI API 요약 (summarizer.py)
 openai>=1.99.0
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+jinja2>=3.1.4
+python-multipart>=0.0.9
