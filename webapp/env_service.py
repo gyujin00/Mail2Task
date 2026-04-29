@@ -30,6 +30,13 @@ def get_env_status() -> EnvStatus:
     return EnvStatus(email=email, has_password=bool(password))
 
 
+def reload_runtime_config():
+    """Reload config so long-lived web requests pick up the latest .env values."""
+    import config
+
+    return importlib.reload(config)
+
+
 def mask_secret(value: str, keep_last: int = 2) -> str:
     """보안 표시용 마스킹. (실제 비밀번호를 UI에 재표시하지 않기 위한 용도)"""
     if not value:

@@ -11,10 +11,17 @@ from fastapi.templating import Jinja2Templates
 
 import config
 from mail_reader import fetch_target_mails
+from notifier import send_completion_notice
 from stats import get_stats
 from todo_manager_adapter import update_status
 
-from .env_service import EnvStatus, get_env_status, mask_secret, upsert_env_values
+from .env_service import (
+    EnvStatus,
+    get_env_status,
+    mask_secret,
+    reload_runtime_config,
+    upsert_env_values,
+)
 from .pipeline_service import sync_inbound
 from .repositories import get_mail, get_task, list_tasks
 
@@ -124,6 +131,7 @@ def settings_save(
 @app.post("/settings/test", response_class=HTMLResponse)
 def settings_test(request: Request):
     try:
+        reload_runtime_config()
         if not config.EMAIL or not config.PASSWORD:
             raise RuntimeError("메일 계정 정보가 설정되지 않았습니다.")
         # 테스트는 “실제 수집 파이프라인”이 아니라,
@@ -300,9 +308,10 @@ def task_complete(request: Request, task_id: str):
         #
         # - 이 함수는 완료 + 미통지(notified=False) 태스크를 찾아 notifier로 메일을 보낸다.
         # - 성공 시 tasks.notified=True로 업데이트한다.
-        from main import run_outbound_pipeline
-
-        run_outbound_pipeline()
+        reload_runtime_config()
+        updated_task = get_task(task_id)
+        if updated_task and send_completion_notice(updated_task):
+            update_status(task_id, notified=True)
 
         updated = get_task(task_id)
         done = bool(updated and updated.get("notified") is True)
@@ -321,6 +330,7 @@ def sync_now(request: Request):
     # 상단 “메일 새로 불러오기” 버튼이 호출하는 엔드포인트.
     # 내부는 기존 수신 파이프라인을 웹용 서비스에서 그대로 재사용한다.
     try:
+        reload_runtime_config()
         result = sync_inbound()
         return templates.TemplateResponse(
             request,
