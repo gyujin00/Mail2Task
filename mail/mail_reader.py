@@ -1,28 +1,24 @@
-"""
-담당: 규진 차
-역할: Gmail IMAP 접속 → [업무협조] 메일 필터링 → PDF 첨부파일 다운로드
-      (핵심 수집 및 추출 기능 - 기본)
-"""
-import imaplib
+"""Gmail IMAP reader and attachment downloader for inbound task mail."""
+
+from __future__ import annotations
+
 import email
-from email.header import decode_header
-from email.utils import parseaddr, parsedate_to_datetime
+import imaplib
 import os
 import re
+from email.header import decode_header
+from email.utils import parseaddr, parsedate_to_datetime
 from pathlib import Path
+
 from core import config
 
 
 def fetch_target_mails():
     """
-    [업무협조] 키워드가 포함된 메일을 수신하여 반환한다.
+    Fetch recent task-related mails and download attached PDFs.
 
-    반환: list[dict], 각 dict의 키:
-        - subject    (str): 메일 제목
-        - sender     (str): 발신자 이메일
-        - body       (str): 메일 본문 텍스트
-        - pdf_paths  (list[str]): 다운로드된 PDF 파일 경로 목록
-        - received_at(str): 수신 일시 "YYYY-MM-DD HH:MM"
+    Returns a list of dict objects containing subject, sender, body, PDF paths,
+    and received timestamp text.
     """
     os.makedirs(config.SAVE_DIR, exist_ok=True)
     results = []
@@ -32,7 +28,7 @@ def fetch_target_mails():
     mail.select("inbox")
 
     _, data = mail.search(None, "ALL")
-    mail_ids = data[0].split()[-50:]  # 최근 50개만 확인
+    mail_ids = data[0].split()[-50:]
 
     print(f"최근 {len(mail_ids)}개 메일 검색 중...")
     for mail_id in reversed(mail_ids):
@@ -47,21 +43,22 @@ def fetch_target_mails():
             continue
 
         pdf_paths = _download_pdfs(msg)
-
-        results.append({
-            "subject":     subject,
-            "sender":      sender,
-            "body":        body,
-            "pdf_paths":   pdf_paths,
-            "received_at": received_at,
-        })
+        results.append(
+            {
+                "subject": subject,
+                "sender": sender,
+                "body": body,
+                "pdf_paths": pdf_paths,
+                "received_at": received_at,
+            }
+        )
 
     mail.logout()
     return results
 
 
 def _decode_str(value):
-    """인코딩된 메일 헤더 문자열을 디코딩한다."""
+    """Decode an encoded mail header value."""
     if not value:
         return ""
     decoded, encoding = decode_header(value)[0]
@@ -71,7 +68,7 @@ def _decode_str(value):
 
 
 def _parse_date(date_str):
-    """메일 Date 헤더를 'YYYY-MM-DD HH:MM' 형식으로 변환한다."""
+    """Convert a mail Date header into `YYYY-MM-DD HH:MM` text."""
     try:
         dt = parsedate_to_datetime(date_str)
         return dt.strftime("%Y-%m-%d %H:%M")
@@ -80,7 +77,7 @@ def _parse_date(date_str):
 
 
 def _extract_body(msg):
-    """멀티파트 메일에서 text/plain 본문을 추출한다."""
+    """Extract the plain-text body from a multipart mail message."""
     body = ""
     for part in msg.walk():
         if part.get_content_type() == "text/plain" and not part.get_filename():
@@ -90,7 +87,11 @@ def _extract_body(msg):
 
 
 def _is_target_mail(subject, body):
-    """제목 패턴이 맞거나 업무성 키워드가 있으면 수집 대상으로 본다."""
+    """Treat bracketed work mail as inbound tasks, except completion notices."""
+    normalized_subject = (subject or "").strip().lower()
+    if normalized_subject.startswith("[완료]"):
+        return False
+
     if re.search(config.SUBJECT_PATTERN, subject or ""):
         return True
 
@@ -108,7 +109,7 @@ def _is_target_mail(subject, body):
 
 
 def _download_pdfs(msg):
-    """msg에서 PDF 첨부파일을 downloads/ 폴더에 저장하고 경로 목록을 반환한다."""
+    """Download attached PDF files and return their saved paths."""
     pdf_paths = []
 
     for part in msg.walk():
@@ -123,15 +124,15 @@ def _download_pdfs(msg):
             continue
 
         filepath = _build_unique_pdf_path(filename)
-        with open(filepath, "wb") as f:
-            f.write(part.get_payload(decode=True))
+        with open(filepath, "wb") as file_handle:
+            file_handle.write(part.get_payload(decode=True))
         pdf_paths.append(filepath)
 
     return pdf_paths
 
 
 def _build_unique_pdf_path(filename):
-    """동일 파일명이 있으면 숫자 suffix를 붙여 유일한 저장 경로를 만든다."""
+    """Create a unique file path by appending numeric suffixes when needed."""
     candidate = Path(config.SAVE_DIR) / filename
     if not candidate.exists():
         return str(candidate)

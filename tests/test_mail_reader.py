@@ -17,7 +17,7 @@ from mail.mail_reader import _download_pdfs, _is_target_mail, fetch_target_mails
 
 
 def _safe_console_text(value: str) -> str:
-    """Avoid crashing on Windows terminals that cannot render some emoji or symbols."""
+    """Avoid crashing on Windows terminals that cannot render some symbols."""
     return str(value).encode("cp949", errors="replace").decode("cp949")
 
 
@@ -37,7 +37,6 @@ def main() -> int:
         return 0
 
     for mail in mails:
-        # Use both subject and body because deadlines often appear in either place.
         full_text = "\n".join(part for part in [mail["subject"], mail["body"]] if part)
         deadline = parse_deadline(full_text, mail["received_at"])
         score, level, deadline = score_urgency(
@@ -52,7 +51,10 @@ def main() -> int:
         print(f"Received at:   {_safe_console_text(mail['received_at'])}")
         print(f"Body preview:  {_safe_console_text(mail['body'][:80])}")
         print(f"PDF files:     {_safe_console_text(mail['pdf_paths'])}")
-        print(f"Urgency:       {_safe_console_text(level)} ({score}) | Deadline: {_safe_console_text(deadline)}")
+        print(
+            f"Urgency:       {_safe_console_text(level)} ({score}) | "
+            f"Deadline: {_safe_console_text(deadline)}"
+        )
 
     return 0
 
@@ -91,9 +93,10 @@ def test_pdf_filename_collision() -> int:
 
 
 def test_target_mail_detection() -> None:
-    """Keyword-based fallback should still catch work mail without a bracket prefix."""
+    """Completion notices should be excluded while task mail is still detected."""
     assert _is_target_mail("[업무요청] 로고 수정 검토", "")
     assert _is_target_mail("디자인 검토 요청", "이번 주 마감입니다.")
+    assert not _is_target_mail("[완료] package regroup verify", "완료 메일입니다.")
     assert not _is_target_mail("점심 메뉴 투표", "오늘 뭐 먹을까요?")
 
 
