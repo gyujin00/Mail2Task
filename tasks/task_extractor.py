@@ -11,10 +11,10 @@ from __future__ import annotations
 import hashlib
 import re
 
-from classifier import score_urgency
-from deadline_parser import parse_deadline_info
-from summarizer import summarize
-from todo_manager_adapter import classify_task_type
+from core.classifier import score_urgency
+from core.deadline_parser import parse_deadline_info
+from core.summarizer import summarize
+from tasks.todo_manager_adapter import classify_task_type
 
 
 TITLE_FIELD_NAMES = ("과업명", "업무명", "task name", "task")

@@ -32,7 +32,7 @@ def get_env_status() -> EnvStatus:
 
 def reload_runtime_config():
     """Reload config so long-lived web requests pick up the latest .env values."""
-    import config
+    from core import config
 
     return importlib.reload(config)
 
@@ -97,7 +97,7 @@ def upsert_env_values(values: dict[str, str]) -> None:
         os.environ[key] = value
 
     try:
-        import config
+        from core import config
 
         # config는 import 시점에 .env를 읽고 상수(EMAIL/PASSWORD)를 만든다.
         # 설정 저장 후 바로 테스트/동기화를 누르면 최신 값이 필요하므로 reload한다.

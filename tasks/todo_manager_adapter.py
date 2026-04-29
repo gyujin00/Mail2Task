@@ -13,7 +13,7 @@ import hashlib
 import importlib
 import re
 
-import mongo_task_store
+from storage import mongo_task_store
 
 
 _todo_manager_module = None
@@ -188,7 +188,7 @@ def _get_todo_manager_module():
         return None
 
     try:
-        _todo_manager_module = importlib.import_module("todo_manager")
+        _todo_manager_module = importlib.import_module("tasks.todo_manager")
         return _todo_manager_module
     except Exception as error:  # pragma: no cover - 환경 의존 fallback
         _todo_manager_import_error = error

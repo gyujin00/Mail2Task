@@ -13,8 +13,8 @@ from datetime import datetime
 
 from pymongo import DESCENDING, MongoClient
 
-import config
-from pdf_keywords import extract_pdf_keywords
+from core import config
+from core.pdf_keywords import extract_pdf_keywords
 
 
 _client = None

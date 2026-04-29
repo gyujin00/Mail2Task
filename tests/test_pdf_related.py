@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import importlib.util
 
-from pdf_related import find_related_pdfs
+from core.pdf_related import find_related_pdfs
 
 
 def test_related_pdf_recommendation():

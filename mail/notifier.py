@@ -5,7 +5,7 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import config
+from core import config
 
 
 def send_completion_notice(todo):

@@ -43,15 +43,15 @@ KOREAN_SUFFIXES = (
     "입니다",
     "있습니다",
     "됩니다",
-    "대한",
+    "대로",
     "에서",
     "으로",
     "까지",
     "부터",
-    "에게",
+    "하게",
     "하고",
     "하며",
-    "했다",
+    "이다",
     "예정",
 )
 
@@ -61,7 +61,7 @@ def extract_pdf_keywords(
     filename: str = "",
     limit: int = 20,
 ) -> list[str]:
-    """PDF 원문에서 명사형에 가까운 핵심 키워드를 규칙 기반으로 추출한다."""
+    """Extract rule-based keywords from PDF text and filename."""
     if not any(part.strip() for part in [filename, text] if part):
         return []
 

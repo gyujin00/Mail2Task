@@ -37,7 +37,7 @@ def find_related_pdfs(
     candidate_pdfs: list[dict],
     limit: int = 5,
 ) -> list[dict]:
-    """`apyori` 기반 연관 규칙으로 source PDF와 연관된 PDF를 추천한다."""
+    """Recommend related PDFs by combining association rules and token overlap."""
     try:
         from apyori import apriori
     except ImportError:
@@ -71,8 +71,8 @@ def find_related_pdfs(
     )
 
     source_token_set = set(source_tokens)
-
     ranked = []
+
     for candidate in candidate_pdfs:
         candidate_id = candidate.get("pdf_id", "")
         candidate_tokens = set(pdf_tokens.get(candidate_id, []))
@@ -126,7 +126,7 @@ def find_related_pdfs(
         shared_keywords = sorted(source_token_set & candidate_tokens)[:5]
         reasons = []
         if shared_keywords:
-            reasons.append("공통 토큰: " + ", ".join(shared_keywords))
+            reasons.append("공통 키워드: " + ", ".join(shared_keywords))
         for item in top_rules:
             reasons.append(
                 "연관 규칙: "
@@ -156,7 +156,7 @@ def find_related_pdfs_for_text(
     limit: int = 5,
     source_name: str = "mail-body",
 ) -> list[dict]:
-    """메일 본문 같은 자유 텍스트를 기준으로 연관 PDF를 추천한다."""
+    """Recommend related PDFs using free-form source text like a mail body."""
     source_document = {
         "pdf_id": f"virtual-{source_name}",
         "filename": source_name,
@@ -187,7 +187,6 @@ def _extract_tokens(pdf_document: dict) -> list[str]:
         if token.lower() not in STOPWORDS
     ]
     counter = Counter(tokens)
-    # transaction 크기를 제한해 지나치게 긴 PDF가 규칙 생성을 오염시키지 않게 한다.
     return [token for token, _ in islice(counter.most_common(20), 20)]
 
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 
-import config
+from core import config
 
 try:
     from openai import OpenAI

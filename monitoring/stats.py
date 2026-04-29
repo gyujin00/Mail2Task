@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from todo_manager_adapter import load_tasks
+from tasks.todo_manager_adapter import load_tasks
 
 
 def print_stats():
