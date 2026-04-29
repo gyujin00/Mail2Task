@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 import config
 from mail_reader import fetch_target_mails
 from notifier import send_completion_notice
+from pdf_related import find_related_pdfs, find_related_pdfs_for_text
 from stats import get_stats
 from todo_manager_adapter import update_status
 
@@ -23,7 +24,7 @@ from .env_service import (
     upsert_env_values,
 )
 from .pipeline_service import sync_inbound
-from .repositories import get_mail, get_task, list_tasks
+from .repositories import get_mail, get_task, list_pdfs, list_pdfs_by_mail, list_tasks
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -283,10 +284,56 @@ def task_detail(request: Request, task_id: str):
             status_code=404,
         )
     mail = get_mail(task.get("mail_id", "")) if task.get("mail_id") else None
+    pdf_documents = list_pdfs_by_mail(task.get("mail_id", "")) if task.get("mail_id") else []
+    related_pdfs = {}
+    attached_pdfs = []
+    body_related_pdfs = []
+    if pdf_documents:
+        other_pdfs = list_pdfs(
+            exclude_pdf_ids=[pdf.get("pdf_id", "") for pdf in pdf_documents if pdf.get("pdf_id")],
+            limit=200,
+        )
+        for pdf_document in pdf_documents:
+            related_pdfs[pdf_document.get("pdf_id", "")] = find_related_pdfs(
+                pdf_document,
+                other_pdfs,
+                limit=5,
+            )
+        body_source_text = (mail.get("body", "") if mail else "") or task.get("raw_body", "")
+        if body_source_text.strip():
+            body_related_pdfs = find_related_pdfs_for_text(
+                body_source_text,
+                other_pdfs,
+                limit=5,
+                source_name=f"mail-body-{task.get('task_id', '')}",
+            )
+    if mail and mail.get("pdf_files"):
+        pdf_by_filename = {
+            pdf.get("filename", ""): pdf
+            for pdf in pdf_documents
+            if pdf.get("filename")
+        }
+        for pdf_file in mail.get("pdf_files", []):
+            filename = pdf_file.get("filename", "")
+            matched_pdf = pdf_by_filename.get(filename)
+            attached_pdfs.append(
+                {
+                    "filename": filename,
+                    "pdf_id": matched_pdf.get("pdf_id", "") if matched_pdf else "",
+                    "related": related_pdfs.get(matched_pdf.get("pdf_id", ""), []) if matched_pdf else [],
+                }
+            )
     return templates.TemplateResponse(
         request,
         "task_detail.html",
-        {"task": task, "mail": mail},
+        {
+            "task": task,
+            "mail": mail,
+            "pdf_documents": pdf_documents,
+            "related_pdfs": related_pdfs,
+            "attached_pdfs": attached_pdfs,
+            "body_related_pdfs": body_related_pdfs,
+        },
     )
 
 

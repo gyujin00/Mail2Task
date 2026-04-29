@@ -20,6 +20,19 @@ def get_mail(mail_id: str) -> dict[str, Any] | None:
     return database.fetch_mail(mail_id)
 
 
+def list_pdfs_by_mail(mail_id: str) -> list[dict[str, Any]]:
+    """mail_id에 연결된 PDF 문서 목록 조회."""
+    return database.fetch_pdfs_by_mail(mail_id)
+
+
+def list_pdfs(
+    exclude_pdf_ids: list[str] | None = None,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """PDF 문서 목록 조회."""
+    return database.fetch_pdfs(exclude_pdf_ids=exclude_pdf_ids, limit=limit)
+
+
 def set_task_status_completed(task_id: str) -> None:
     """업무 완료 처리(상태 변경). 알림 발송은 notifier가 담당."""
     database.update_task(task_id, {"status": "완료"})

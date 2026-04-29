@@ -35,6 +35,11 @@ def save_mail(mail):
     return mongo_task_store.save_mail(mail)
 
 
+def save_pdf_documents(mail):
+    """메일에 포함된 PDF 원문 문서를 MongoDB pdf_documents 컬렉션에 저장한다."""
+    return mongo_task_store.save_pdf_documents(mail)
+
+
 def save_todo(task, existing_todos):
     """
     todo_manager 원본 로직을 최대한 거쳐 단일 Task를 저장한다.

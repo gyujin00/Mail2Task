@@ -5,7 +5,7 @@ PDF 추출 파이프라인 통합 테스트
 from pathlib import Path
 from pdf_extractor import extract_text_from_pdf
 from summarizer import summarize
-from mongo_task_store import save_mail
+from mongo_task_store import save_mail, save_pdf_documents
 from task_extractor import extract_tasks_from_mail
 
 def test_pdf_pipeline():
@@ -51,6 +51,11 @@ def test_pdf_pipeline():
     print(f"  mail_id: {saved_mail['mail_id']}")
     print(f"  has_pdf: {saved_mail['has_pdf']}")
     print(f"  pdf_count: {saved_mail['pdf_count']}")
+
+    pdf_documents = save_pdf_documents(saved_mail)
+    print(f"  pdf_documents: {len(pdf_documents)}개")
+    if pdf_documents:
+        print(f"  pdf_keywords: {pdf_documents[0].get('keywords', [])[:10]}")
 
     # 5. Task 추출 (PDF 텍스트 포함)
     print(f"\n[5단계] Task 추출")
