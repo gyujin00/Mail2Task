@@ -24,7 +24,14 @@ from .env_service import (
     upsert_env_values,
 )
 from .pipeline_service import sync_inbound
-from .repositories import get_mail, get_task, list_pdfs, list_pdfs_by_mail, list_tasks
+from .repositories import (
+    get_mail,
+    get_task,
+    list_pdfs,
+    list_pdfs_by_mail,
+    list_tasks,
+    refresh_task_summary,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -323,6 +330,7 @@ def task_detail(request: Request, task_id: str):
                     "related": related_pdfs.get(matched_pdf.get("pdf_id", ""), []) if matched_pdf else [],
                 }
             )
+    task = refresh_task_summary(task, mail)
     return templates.TemplateResponse(
         request,
         "task_detail.html",

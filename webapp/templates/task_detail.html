@@ -12,7 +12,7 @@
             </div>
           </div>
           <div class="d-flex align-items-center gap-2">
-            <span class="badge {% if task.status=='완료' %}text-bg-success{% else %}text-bg-primary{% endif %}">
+            <span class="badge {% if task.status == '완료' %}text-bg-success{% else %}text-bg-primary{% endif %}">
               {{ task.status or "미분류" }}
             </span>
           </div>
@@ -20,9 +20,9 @@
         <div class="card-body">
           {% set done = request.query_params.get('done') %}
           {% if done == '1' %}
-            <div class="alert alert-success">완료 처리 및 발신자 알림 메일 발송이 완료되었습니다.</div>
+            <div class="alert alert-success">완료 처리와 완료 알림 메일 발송이 끝났습니다.</div>
           {% elif done == '0' %}
-            <div class="alert alert-warning">업무는 완료로 변경되었지만, 발신자 알림 메일 발송에 실패했습니다.</div>
+            <div class="alert alert-warning">업무는 완료 처리됐지만 완료 알림 메일 발송은 실패했습니다.</div>
           {% endif %}
 
           <div class="row g-3">
@@ -48,7 +48,7 @@
             <div class="col-12">
               <div class="kpi-box">
                 <div class="text-muted small">요약</div>
-                <div class="fw-semibold">{{ task.summary or "(요약 없음)" }}</div>
+                <div class="fw-semibold" style="white-space: pre-line;">{{ task.summary or "(요약 없음)" }}</div>
               </div>
             </div>
           </div>
@@ -58,7 +58,7 @@
           <div class="d-flex gap-2 mb-3">
             {% if task.status != "완료" %}
               <form method="post" action="/tasks/{{ task.task_id }}/complete" onsubmit="return confirm('이 업무를 완료로 처리하고, 발신자에게 완료 알림 메일을 발송할까요?');">
-                <button class="btn btn-success" type="submit">완료 표시 + 알림 발송</button>
+                <button class="btn btn-success" type="submit">완료 처리 + 알림 발송</button>
               </form>
             {% endif %}
             <a class="btn btn-outline-secondary" href="/tasks">목록으로</a>
@@ -143,7 +143,7 @@
                       {% endfor %}
                     </div>
                   {% elif task.has_pdf %}
-                    <div class="text-muted">첨부 PDF 정보가 메일 문서에 없어서 다운로드 목록을 표시할 수 없습니다.</div>
+                    <div class="text-muted">첨부 PDF 정보는 있으나 메일 문서에 다운로드 목록이 없습니다.</div>
                   {% else %}
                     <div class="text-muted">첨부 PDF 없음</div>
                   {% endif %}
@@ -172,4 +172,3 @@
     </div>
   </div>
 {% endblock %}
-
