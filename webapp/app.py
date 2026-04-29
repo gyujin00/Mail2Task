@@ -188,7 +188,7 @@ def tasks_page(
     urgency: str | None = None,
     task_type: str | None = None,
     category: str | None = None,
-    sort: str | None = "latest",
+    sort: str | None = "urgency",
 ):
     # 리스트는 “tasks 컬렉션”을 기준으로 제공한다.
     # (메일 1건에서 task N건이 나오는 구조 유지)
@@ -225,12 +225,18 @@ def tasks_page(
         # 마감일이 없는 업무는 항상 뒤로 보내기 위해 9999-12-31을 사용한다.
         return (task.get("deadline_date") or "9999-12-31", task.get("deadline_time") or "")
 
+    def _latest_key(task: dict):
+        return task.get("received_at") or ""
+
     if sort == "deadline":
         filtered.sort(key=_deadline_key)
     elif sort == "urgency":
-        filtered.sort(key=lambda t: int(t.get("urgency_score") or 0), reverse=True)
+        filtered.sort(
+            key=lambda t: (int(t.get("urgency_score") or 0), _latest_key(t)),
+            reverse=True,
+        )
     else:  # latest
-        filtered.sort(key=lambda t: (t.get("received_at") or ""), reverse=True)
+        filtered.sort(key=_latest_key, reverse=True)
 
     # 필터 옵션 생성
     def _uniq(key: str):
@@ -260,7 +266,7 @@ def tasks_page(
             "urgency": urgency or "",
             "task_type": task_type or "",
             "category": category or "",
-            "sort": sort or "latest",
+            "sort": sort or "urgency",
         },
     )
 
