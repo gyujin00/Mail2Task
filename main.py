@@ -21,7 +21,7 @@ from notifier import send_completion_notice
 from pdf_extractor import extract_text_from_pdf
 from stats import print_stats
 from task_extractor import extract_tasks_from_mail
-from todo_manager import (
+from todo_manager_adapter import (
     get_completed_unnotified,
     load_tasks,
     mail_exists,
