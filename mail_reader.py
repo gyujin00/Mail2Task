@@ -9,6 +9,7 @@ from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 import os
 import re
+from pathlib import Path
 import config
 
 
@@ -103,9 +104,26 @@ def _download_pdfs(msg):
         if not filename.lower().endswith(".pdf"):
             continue
 
-        filepath = os.path.join(config.SAVE_DIR, filename)
+        filepath = _build_unique_pdf_path(filename)
         with open(filepath, "wb") as f:
             f.write(part.get_payload(decode=True))
         pdf_paths.append(filepath)
 
     return pdf_paths
+
+
+def _build_unique_pdf_path(filename):
+    """동일 파일명이 있으면 숫자 suffix를 붙여 유일한 저장 경로를 만든다."""
+    candidate = Path(config.SAVE_DIR) / filename
+    if not candidate.exists():
+        return str(candidate)
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    index = 2
+
+    while True:
+        renamed = candidate.with_name(f"{stem} ({index}){suffix}")
+        if not renamed.exists():
+            return str(renamed)
+        index += 1
