@@ -54,11 +54,18 @@ def extract_tasks_from_mail(mail_document):
             deadline_info = parse_deadline_info(task_scope_text or full_text, received_at)
         task_type = _extract_task_type(block, task_scope_text)
         priority_raw = _extract_field_value(block, PRIORITY_FIELD_NAMES)
-        summary = summarize(task_scope_text or full_text)
         urgency_score, urgency_level, _ = score_urgency(
             task_scope_text or full_text,
             received_at,
             deadline=deadline_info["date"],
+        )
+        summary = summarize(
+            task_scope_text or full_text,
+            subject=subject,
+            title=title,
+            deadline_date=deadline_info["date"],
+            urgency_level=urgency_level,
+            task_type=task_type,
         )
 
         task_id = _make_task_id(mail_id, index, title)
