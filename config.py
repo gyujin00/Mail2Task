@@ -34,10 +34,10 @@ SMTP_PORT = 587
 EMAIL = os.environ.get("TASK_EMAIL", "")
 PASSWORD = os.environ.get("TASK_PASSWORD", "")  # Gmail 앱 비밀번호
 
-# MongoDB 설정
+# MongoDB 설정 (로컬 개발용 - 인증 비활성화)
 MONGODB_URI = os.environ.get(
     "MONGODB_URI",
-    "mongodb://admin:admin1234@localhost:27017/mail2task?authSource=admin",
+    "mongodb://localhost:27017/mail2task",
 )
 MONGODB_DB = os.environ.get("MONGODB_DB", "mail2task")
 MONGODB_MAILS_COLLECTION = os.environ.get("MONGODB_MAILS_COLLECTION", "mails")
