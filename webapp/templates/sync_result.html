@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% set title = "동기화 결과" %}
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <div class="h6 mb-0">메일 동기화 결과</div>
+          <a class="btn btn-sm btn-outline-secondary" href="/dashboard">대시보드로</a>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-info mb-4">
+            수집 파이프라인을 실행했습니다(중복 방지 포함).
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-3">
+              <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                  <div class="text-muted small">조회 메일</div>
+                  <div class="display-6 fw-semibold">{{ result.fetched_mails }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-3">
+              <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                  <div class="text-muted small">새 메일</div>
+                  <div class="display-6 fw-semibold">{{ result.new_mails }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-3">
+              <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                  <div class="text-muted small">새 Task</div>
+                  <div class="display-6 fw-semibold">{{ result.new_tasks }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-3">
+              <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                  <div class="text-muted small">실패</div>
+                  <div class="display-6 fw-semibold {% if result.failed>0 %}text-danger{% endif %}">{{ result.failed }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <a class="btn btn-primary" href="/tasks">To-do 리스트 보기</a>
+            <form method="post" action="/sync">
+              <button class="btn btn-outline-secondary" type="submit">한 번 더 동기화</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

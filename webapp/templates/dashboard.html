@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% set title = "대시보드" %}
+{% block content %}
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-3">
+      <div class="card stat-card shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">전체 업무</div>
+          <div class="display-6 fw-semibold">{{ stats.total }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-3">
+      <div class="card stat-card shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">오늘 마감</div>
+          <div class="display-6 fw-semibold">{{ stats.due_today_count }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-3">
+      <div class="card stat-card shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">이번 주 마감</div>
+          <div class="display-6 fw-semibold">{{ stats.due_this_week_count }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-3">
+      <div class="card stat-card shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">기한 초과(미완료)</div>
+          <div class="display-6 fw-semibold text-danger">{{ stats.overdue_count }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-xl-6">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <div class="h6 mb-0">상태별</div>
+          <a class="btn btn-sm btn-outline-secondary" href="/tasks">리스트 보기</a>
+        </div>
+        <div class="card-body">
+          <div class="chart-box">
+            <canvas id="chartStatus"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-6">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <div class="h6 mb-0">긴급도별</div>
+        </div>
+        <div class="card-body">
+          <div class="chart-box">
+            <canvas id="chartUrgency"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-6">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <div class="h6 mb-0">업무유형별</div>
+        </div>
+        <div class="card-body">
+          <div class="chart-box">
+            <canvas id="chartType"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-6">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <div class="h6 mb-0">말머리별</div>
+        </div>
+        <div class="card-body">
+          <div class="chart-box">
+            <canvas id="chartCategory"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Chart.js "대시보드 느낌" 기본값
+    Chart.defaults.font.family = "system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif";
+    Chart.defaults.color = "rgba(33, 37, 41, 0.85)";
+    Chart.defaults.borderColor = "rgba(33, 37, 41, 0.08)";
+
+    function makeBarChart(elId, labels, values, palette) {
+      const canvas = document.getElementById(elId);
+      if (!canvas) return;
+
+      const maxValue = Math.max(0, ...values.map(v => Number(v) || 0));
+      const suggestedMax = maxValue <= 5 ? 5 : undefined;
+
+      new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "건수",
+              data: values,
+              backgroundColor: palette.fill,
+              borderColor: palette.stroke,
+              borderWidth: 1.2,
+              borderRadius: 10,
+              borderSkipped: false,
+              maxBarThickness: 46,
+              categoryPercentage: 0.72,
+              barPercentage: 0.9,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 650, easing: "easeOutQuart" },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "rgba(17, 24, 39, 0.95)",
+              titleColor: "#fff",
+              bodyColor: "rgba(255,255,255,0.92)",
+              padding: 12,
+              displayColors: false,
+              callbacks: {
+                label: (ctx) => ` ${ctx.parsed.y}건`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              ticks: { autoSkip: false, maxRotation: 0 },
+              grid: { display: false },
+            },
+            y: {
+              beginAtZero: true,
+              suggestedMax,
+              ticks: { precision: 0 },
+              grid: { color: "rgba(33, 37, 41, 0.08)" },
+            },
+          },
+        },
+      });
+    }
+
+    const statusLabels = {{ stats.by_status.keys() | list | tojson }};
+    const statusValues = {{ stats.by_status.values() | list | tojson }};
+    const urgencyLabels = {{ stats.by_urgency.keys() | list | tojson }};
+    const urgencyValues = {{ stats.by_urgency.values() | list | tojson }};
+    const typeLabels = {{ stats.by_type.keys() | list | tojson }};
+    const typeValues = {{ stats.by_type.values() | list | tojson }};
+    const categoryLabels = {{ stats.by_category.keys() | list | tojson }};
+    const categoryValues = {{ stats.by_category.values() | list | tojson }};
+
+    makeBarChart("chartStatus", statusLabels, statusValues, {
+      fill: "rgba(59, 130, 246, 0.24)",
+      stroke: "rgba(59, 130, 246, 0.9)",
+    });
+    makeBarChart("chartUrgency", urgencyLabels, urgencyValues, {
+      fill: "rgba(245, 158, 11, 0.26)",
+      stroke: "rgba(245, 158, 11, 0.95)",
+    });
+    makeBarChart("chartType", typeLabels, typeValues, {
+      fill: "rgba(34, 197, 94, 0.22)",
+      stroke: "rgba(34, 197, 94, 0.9)",
+    });
+    makeBarChart("chartCategory", categoryLabels, categoryValues, {
+      fill: "rgba(168, 85, 247, 0.22)",
+      stroke: "rgba(168, 85, 247, 0.9)",
+    });
+  </script>
+{% endblock %}
+

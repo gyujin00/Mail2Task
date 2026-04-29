@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% set title = "업무 상세" %}
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex align-items-center justify-content-between">
+          <div>
+            <div class="h6 mb-0">{{ task.title or task.subject }}</div>
+            <div class="text-muted small">
+              {{ task.sender }} · 수신 {{ task.received_at }} · 말머리 {{ task.mail_category or "미분류" }}
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge {% if task.status=='완료' %}text-bg-success{% else %}text-bg-primary{% endif %}">
+              {{ task.status or "미분류" }}
+            </span>
+          </div>
+        </div>
+        <div class="card-body">
+          {% set done = request.query_params.get('done') %}
+          {% if done == '1' %}
+            <div class="alert alert-success">완료 처리 및 발신자 알림 메일 발송이 완료되었습니다.</div>
+          {% elif done == '0' %}
+            <div class="alert alert-warning">업무는 완료로 변경되었지만, 발신자 알림 메일 발송에 실패했습니다.</div>
+          {% endif %}
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <div class="kpi-box">
+                <div class="text-muted small">긴급도</div>
+                <div class="fw-semibold">
+                  {{ task.urgency_level or "미분류" }} ({{ task.urgency_score or 0 }})
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="kpi-box">
+                <div class="text-muted small">마감일</div>
+                <div class="fw-semibold">
+                  {{ task.deadline_date or "미정" }} {{ task.deadline_time or "" }}
+                </div>
+                {% if task.deadline_source %}
+                  <div class="text-muted small">출처: {{ task.deadline_source }} · {{ task.deadline_raw_text }}</div>
+                {% endif %}
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="kpi-box">
+                <div class="text-muted small">요약</div>
+                <div class="fw-semibold">{{ task.summary or "(요약 없음)" }}</div>
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-4" />
+
+          <div class="d-flex gap-2 mb-3">
+            {% if task.status != "완료" %}
+              <form method="post" action="/tasks/{{ task.task_id }}/complete" onsubmit="return confirm('이 업무를 완료로 처리하고, 발신자에게 완료 알림 메일을 발송할까요?');">
+                <button class="btn btn-success" type="submit">완료 표시 + 알림 발송</button>
+              </form>
+            {% endif %}
+            <a class="btn btn-outline-secondary" href="/tasks">목록으로</a>
+          </div>
+
+          <div class="accordion" id="accDetail">
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMail">
+                  원본 메일 정보
+                </button>
+              </h2>
+              <div id="collapseMail" class="accordion-collapse collapse show" data-bs-parent="#accDetail">
+                <div class="accordion-body">
+                  <div class="mb-2"><b>메일 제목</b>: {{ task.subject }}</div>
+                  <div class="mb-2"><b>메일 본문</b></div>
+                  <pre class="prebox">{{ (mail.body if mail else task.raw_body) or "" }}</pre>
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePdf">
+                  첨부 PDF
+                </button>
+              </h2>
+              <div id="collapsePdf" class="accordion-collapse collapse" data-bs-parent="#accDetail">
+                <div class="accordion-body">
+                  {% if mail and mail.pdf_files and (mail.pdf_files | length) > 0 %}
+                    <ul class="mb-0">
+                      {% for f in mail.pdf_files %}
+                        <li class="mb-1">
+                          <a href="/downloads/{{ mail.mail_id }}/{{ f.filename }}" class="link-primary">{{ f.filename }}</a>
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  {% elif task.has_pdf %}
+                    <div class="text-muted">첨부 PDF 정보가 메일 문서에 없어서 다운로드 목록을 표시할 수 없습니다.</div>
+                  {% else %}
+                    <div class="text-muted">첨부 PDF 없음</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <div class="h6 mb-0">추출 정보</div>
+        </div>
+        <div class="card-body small">
+          <div class="mb-2"><span class="text-muted">업무유형</span><br /><b>{{ task.task_type or "미분류" }}</b></div>
+          <div class="mb-2"><span class="text-muted">엔티티(time)</span><br />{{ (task.time_entities or []) | join(", ") }}</div>
+          <div class="mb-2"><span class="text-muted">엔티티(target)</span><br />{{ (task.target_entities or []) | join(", ") }}</div>
+          <div class="mb-2"><span class="text-muted">엔티티(action)</span><br />{{ (task.action_entities or []) | join(", ") }}</div>
+          <div class="mb-2"><span class="text-muted">메일 ID</span><br /><code>{{ task.mail_id }}</code></div>
+          <div class="mb-2"><span class="text-muted">Task ID</span><br /><code>{{ task.task_id }}</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

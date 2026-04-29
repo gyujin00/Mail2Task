@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% set title = "오류" %}
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm border-danger">
+        <div class="card-header bg-white">
+          <div class="h6 mb-0 text-danger">요청 처리 중 오류가 발생했습니다</div>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-danger mb-3">{{ error }}</div>
+          <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" href="/dashboard">대시보드로</a>
+            <a class="btn btn-outline-secondary" href="/settings">설정으로</a>
+            <a class="btn btn-outline-secondary" href="/tasks">To-do로</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

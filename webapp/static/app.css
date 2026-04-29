@@ -1,0 +1,43 @@
+:root {
+  --app-navy: #0b1f3a;
+  --app-navy-2: #0f2d55;
+}
+
+.app-nav {
+  background: linear-gradient(90deg, var(--app-navy), var(--app-navy-2));
+}
+
+.stat-card {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.card {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.card-header.bg-white {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.chart-box {
+  position: relative;
+  height: 260px;
+}
+
+.kpi-box {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background: #fff;
+}
+
+.prebox {
+  background: #0b1220;
+  color: #dbe7ff;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
