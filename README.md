@@ -1,6 +1,7 @@
 # Mail2Task
 
-Mail2Task는 Gmail 메일과 PDF 첨부를 읽어 할 일을 추출하고, MongoDB에 저장한 뒤, FastAPI 웹 화면에서 관리하고 완료 시 회신 메일까지 보내는 메일 기반 업무 자동화 프로젝트입니다.
+Mail2Task는 Gmail 메일과 첨부 PDF를 읽어 업무를 추출하고, MongoDB에 저장한 뒤 FastAPI 웹 화면에서 관리하는 메일 기반 업무 자동화 프로젝트입니다.  
+메일 본문과 PDF를 함께 분석해 업무, 마감일, 긴급도, 요약을 정리하고, 완료 처리 시 발신자에게 완료 메일까지 보낼 수 있습니다.
 
 ## 1. 프로젝트가 하는 일
 
@@ -9,10 +10,10 @@ Mail2Task는 Gmail 메일과 PDF 첨부를 읽어 할 일을 추출하고, Mongo
 1. Gmail IMAP으로 최근 메일을 조회합니다.
 2. 제목과 본문을 기준으로 업무 메일인지 판별합니다.
 3. 첨부 PDF가 있으면 `downloads/`에 저장하고 텍스트를 추출합니다.
-4. 메일 본문과 PDF 텍스트를 합쳐 Task를 하나 이상 추출합니다.
-5. 각 Task의 마감일, 긴급도, 유형, 요약을 생성합니다.
-6. MongoDB의 `mails`, `tasks` 컬렉션에 저장합니다.
-7. 웹 화면에서 목록, 상세, 통계를 보여줍니다.
+4. 메일 본문과 PDF 텍스트를 바탕으로 하나 이상의 Task를 추출합니다.
+5. 각 Task의 마감일, 긴급도, 업무 유형, 요약을 생성합니다.
+6. MongoDB의 `mails`, `tasks`, `pdf_documents` 컬렉션에 저장합니다.
+7. 웹 화면에서 목록, 상세, 통계를 확인할 수 있습니다.
 8. 사용자가 완료 버튼을 누르면 완료 상태를 저장하고 완료 메일을 발송합니다.
 
 ## 2. 주요 기능
@@ -21,12 +22,14 @@ Mail2Task는 Gmail 메일과 PDF 첨부를 읽어 할 일을 추출하고, Mongo
 - 업무 메일 필터링
 - PDF 첨부 다운로드 및 텍스트 추출
 - 메일 1건에서 Task 여러 건 추출
-- 마감일 파싱과 긴급도 계산
-- MongoDB 기반 메일/Task 저장
+- 마감일 파싱 및 긴급도 계산
+- MongoDB 기반 메일, Task, PDF 문서 저장
 - FastAPI 기반 웹 UI
 - OpenAI 기반 짧은 업무 요약 생성
-- 완료 처리 시 발신자에게 완료 메일 발송
-- 상태/유형/긴급도/카테고리 통계 조회
+- 완료 처리 후 발신자에게 완료 메일 발송
+- 상태, 유형, 긴급도, 카테고리 통계 조회
+- 첨부 PDF 기준 연관 PDF 추천
+- 메일 본문 기준 관련 PDF 추천
 
 ## 3. 전체 흐름
 
@@ -39,7 +42,7 @@ Gmail Inbox
   -> tasks/task_extractor.py
   -> core/summarizer.py
   -> tasks/todo_manager_adapter.py / storage/mongo_task_store.py
-  -> MongoDB (mails, tasks)
+  -> MongoDB (mails, tasks, pdf_documents)
   -> webapp/app.py
   -> Browser UI
 ```
@@ -55,6 +58,17 @@ Task detail page
   -> tasks.notified = True
 ```
 
+### PDF 추천 흐름
+
+```text
+Stored PDF documents
+  -> core/pdf_keywords.py
+  -> core/pdf_related.py
+  -> webapp/repositories.py
+  -> webapp/app.py
+  -> Task detail page related PDF section
+```
+
 ## 4. 폴더 구조
 
 ```text
@@ -63,7 +77,9 @@ Mail2Task/
 │  ├─ config.py
 │  ├─ classifier.py
 │  ├─ deadline_parser.py
-│  └─ summarizer.py
+│  ├─ summarizer.py
+│  ├─ pdf_keywords.py
+│  └─ pdf_related.py
 ├─ mail/
 │  ├─ mail_reader.py
 │  ├─ notifier.py
@@ -86,7 +102,9 @@ Mail2Task/
 │  ├─ test_mail_reader.py
 │  ├─ test_notification.py
 │  ├─ test_pdf_extractor.py
+│  ├─ test_pdf_keywords.py
 │  ├─ test_pdf_pipeline.py
+│  ├─ test_pdf_related.py
 │  └─ test_todo.py
 ├─ webapp/
 │  ├─ app.py
@@ -108,20 +126,24 @@ Mail2Task/
 
 ### `core/`
 
-공통 설정과 텍스트 처리 로직을 담습니다.
+공통 설정과 텍스트 처리 로직이 들어 있습니다.
 
 - `core/config.py`
   `.env` 로드, Gmail, MongoDB, OpenAI, 저장 경로 설정
 - `core/classifier.py`
-  긴급도 계산, 중복 판별, 유사 업무 그룹화
+  긴급도 계산, 유사 업무 판별, 중복/그룹화 로직
 - `core/deadline_parser.py`
-  본문/제목에서 마감일과 시간을 추출
+  제목과 본문에서 마감일과 시간을 추출
 - `core/summarizer.py`
   상세 화면용 1~2줄 요약 생성
+- `core/pdf_keywords.py`
+  PDF 텍스트와 파일명에서 키워드 추출
+- `core/pdf_related.py`
+  저장된 PDF들 사이의 연관도를 계산하고 추천 목록 생성
 
 ### `mail/`
 
-메일 입출력과 PDF 처리 로직을 담습니다.
+메일 입출력과 PDF 처리 로직이 들어 있습니다.
 
 - `mail/mail_reader.py`
   Gmail IMAP 조회, 본문 추출, PDF 다운로드
@@ -132,14 +154,14 @@ Mail2Task/
 
 ### `tasks/`
 
-Task 생성과 Task 관리 로직을 담습니다.
+Task 생성과 Task 관리 로직이 들어 있습니다.
 
 - `tasks/task_extractor.py`
   메일 1건에서 Task 여러 건 추출
 - `tasks/todo_manager.py`
   기존 To-do 분류 및 엔티티 추출 로직
 - `tasks/todo_manager_adapter.py`
-  기존 로직과 현재 Mongo 저장 구조를 연결하는 어댑터
+  기존 로직과 현재 MongoDB 저장 구조를 연결하는 어댑터
 - `tasks/todo_analyzer.py`
   Transformers 기반 분석기
 
@@ -148,13 +170,13 @@ Task 생성과 Task 관리 로직을 담습니다.
 MongoDB 저장과 조회를 담당합니다.
 
 - `storage/mongo_task_store.py`
-  실제 메일/Task 저장소
+  실제 메일, Task, PDF 문서 저장소
 - `storage/database.py`
-  웹 레이어에서 쓰기 쉬운 조회/업데이트 래퍼
+  웹 레이어에서 쓰기 쉬운 조회, 업데이트 헬퍼
 
 ### `monitoring/`
 
-대시보드와 통계 계산을 담당합니다.
+대시보드용 통계 계산을 담당합니다.
 
 - `monitoring/stats.py`
   상태, 긴급도, 유형, 마감 통계 집계
@@ -164,13 +186,13 @@ MongoDB 저장과 조회를 담당합니다.
 웹 UI 계층입니다.
 
 - `webapp/app.py`
-  FastAPI 라우팅 진입점
+  FastAPI 라우트 진입점
 - `webapp/env_service.py`
-  `.env` 읽기/쓰기, 런타임 설정 재로딩
+  `.env` 읽기, 쓰기, 런타임 설정 reload
 - `webapp/pipeline_service.py`
-  웹에서 수집 파이프라인을 재사용하는 서비스
+  웹에서 수집 파이프라인을 실행하는 서비스
 - `webapp/repositories.py`
-  화면용 조회와 요약 갱신 로직
+  화면 조회와 요약 갱신 로직
 - `webapp/templates/`
   Jinja2 템플릿
 - `webapp/static/`
@@ -179,7 +201,7 @@ MongoDB 저장과 조회를 담당합니다.
 ### `tests/`와 `scripts/`
 
 - `tests/`
-  메일, PDF, 알림, 분류기, 웹 흐름을 점검하는 테스트 스크립트
+  메일, PDF, 알림, 분류기, 추천 기능 검증용 테스트 스크립트
 - `scripts/`
   샘플 PDF 생성 같은 수동 실행 유틸리티
 
@@ -187,7 +209,7 @@ MongoDB 저장과 조회를 담당합니다.
 
 ### `webapp/app.py`
 
-주요 엔드포인트는 아래와 같습니다.
+주요 라우트는 아래와 같습니다.
 
 - `/`
   기본 진입 시 `/tasks`로 리다이렉트
@@ -204,15 +226,29 @@ MongoDB 저장과 조회를 담당합니다.
 - `/tasks/{task_id}`
   Task 상세 화면
 - `/tasks/{task_id}/complete`
-  완료 처리와 완료 메일 발송
+  완료 처리 및 완료 메일 발송
 - `/sync`
   메일 새로 불러오기
 - `/downloads/{mail_id}/{filename}`
   첨부 PDF 다운로드
 
+### Task 상세 화면에서 제공하는 PDF 추천
+
+Task 상세 화면에서는 두 가지 방식의 관련 PDF 추천을 제공합니다.
+
+- 메일에 실제로 첨부된 PDF를 기준으로, 다른 저장된 PDF 중 연관성이 높은 문서를 추천
+- 메일 본문 자체를 기준으로, 내용이 비슷한 PDF를 추천
+
+이 기능은 아래 정보를 활용합니다.
+
+- PDF 파일명
+- PDF 본문 텍스트
+- PDF에서 추출한 키워드
+- PDF 간 공통 토큰과 연관 규칙 기반 점수
+
 ## 7. 데이터 저장 구조
 
-MongoDB는 기본적으로 두 컬렉션을 사용합니다.
+MongoDB는 기본적으로 세 개의 컬렉션을 사용합니다.
 
 ### `mails`
 
@@ -228,6 +264,7 @@ MongoDB는 기본적으로 두 컬렉션을 사용합니다.
 - `body`
 - `pdf_files`
 - `pdf_paths`
+- `pdf_ids`
 - `has_pdf`
 - `pdf_count`
 
@@ -257,7 +294,22 @@ MongoDB는 기본적으로 두 컬렉션을 사용합니다.
 - `pdf_paths`
 - `notified`
 
-웹 목록은 `mails`가 아니라 `tasks` 컬렉션을 직접 읽습니다.
+### `pdf_documents`
+
+첨부 PDF를 문서 단위로 저장하고 추천 기능에서 활용합니다.
+
+대표 필드:
+
+- `pdf_id`
+- `mail_id`
+- `task_ids`
+- `filename`
+- `path`
+- `text`
+- `keywords`
+- `keyword_count`
+- `created_at`
+- `updated_at`
 
 ## 8. 환경 변수
 
@@ -269,6 +321,7 @@ TASK_PASSWORD=your_16_char_app_password
 MONGODB_URI=mongodb://...
 MONGODB_DB=mail2task
 MONGODB_MAILS_COLLECTION=mails
+MONGODB_PDFS_COLLECTION=pdf_documents
 MONGODB_TASKS_COLLECTION=tasks
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.4-mini
@@ -277,13 +330,15 @@ OPENAI_MODEL=gpt-5.4-mini
 설명:
 
 - `TASK_EMAIL`
-  메일 수집/발송에 사용할 Gmail 계정
+  메일 수집과 발송에 사용할 Gmail 계정
 - `TASK_PASSWORD`
   Gmail 앱 비밀번호
 - `MONGODB_URI`
   MongoDB 연결 문자열
+- `MONGODB_PDFS_COLLECTION`
+  PDF 문서를 저장할 컬렉션 이름
 - `OPENAI_API_KEY`
-  LLM 요약 기능에 필요한 OpenAI API 키
+  요약 기능에 필요한 OpenAI API 키
 - `OPENAI_MODEL`
   요약 생성에 사용할 OpenAI 모델
 
@@ -300,7 +355,7 @@ pip install -r requirements.txt
 
 ### 2) `.env` 준비
 
-`.env.example`을 참고해서 `.env`를 만들거나 웹의 `/settings` 화면에서 직접 저장할 수 있습니다.
+`.env.example`를 참고해서 `.env`를 만들거나 웹의 `/settings` 화면에서 직접 저장할 수 있습니다.
 
 중요:
 
@@ -309,7 +364,7 @@ pip install -r requirements.txt
 
 ### 3) MongoDB 실행
 
-로컬 MongoDB가 없다면 `docker-compose.yml`을 사용하면 됩니다.
+로컬 MongoDB가 없다면 `docker-compose.yml`을 사용할 수 있습니다.
 
 ```powershell
 docker compose up -d
@@ -321,7 +376,7 @@ docker compose up -d
 .\.venv\Scripts\python.exe main.py
 ```
 
-이 명령은 메일 수집, Task 저장, 완료 메일 발송, 통계 출력까지 한 번에 수행합니다.
+이 명령은 메일 수집, Task 저장, 완료 메일 발송, 통계 출력까지 한 번에 실행합니다.
 
 ### 5) 웹 실행
 
@@ -359,7 +414,7 @@ docker compose up -d
 - 긴급도 필터
 - 유형 필터
 - 카테고리 필터
-- 긴급도/마감/최신순 정렬
+- 긴급도, 마감일, 최신순 정렬
 
 ### Task 상세
 
@@ -371,4 +426,5 @@ docker compose up -d
 - 요약
 - 원문 내용
 - 첨부 PDF 다운로드
+- 연관 PDF 추천
 - 완료 처리
