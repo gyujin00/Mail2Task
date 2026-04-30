@@ -14,6 +14,7 @@ import re
 from core.classifier import score_urgency
 from core.deadline_parser import parse_deadline_info
 from core.summarizer import summarize
+from core.todo_extractor import extract_todo_list
 from tasks.todo_manager_adapter import classify_task_type
 
 
@@ -67,6 +68,11 @@ def extract_tasks_from_mail(mail_document):
             urgency_level=urgency_level,
             task_type=task_type,
         )
+        todo_list = extract_todo_list(
+            task_scope_text or full_text,
+            subject=subject,
+            title=title,
+        )
 
         task_id = _make_task_id(mail_id, index, title)
         tasks.append(
@@ -95,6 +101,7 @@ def extract_tasks_from_mail(mail_document):
                 "pdf_paths": [file.get("path", "") for file in pdf_files if file.get("path")],
                 "summary": summary,
                 "task_summary": summary,
+                "todo_list": todo_list,
                 "source_text": block.strip() or task_scope_text,
                 "raw_body": body,
                 "notified": False,

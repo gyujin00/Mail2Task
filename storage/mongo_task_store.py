@@ -146,6 +146,7 @@ def save_tasks(tasks):
             "pdf_paths": task.get("pdf_paths", []),
             "summary": task.get("summary") or task.get("task_summary", ""),
             "task_summary": task.get("summary") or task.get("task_summary", ""),
+            "todo_list": task.get("todo_list", []),
             "source_text": task.get("source_text", ""),
             "raw_body": task.get("raw_body", ""),
             "time": task.get("time", ""),

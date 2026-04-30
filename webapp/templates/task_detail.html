@@ -25,6 +25,28 @@
             <div class="alert alert-warning">업무는 완료 처리됐지만 완료 알림 메일 발송은 실패했습니다.</div>
           {% endif %}
 
+          {% set todo_items = task.todo_list or [] %}
+          <div class="card mb-3" style="border: 2px solid #0d6efd; border-radius: 8px;">
+            <div class="card-header text-white d-flex align-items-center gap-2" style="background:#0d6efd; border-radius: 6px 6px 0 0;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12zm-2.5 8.5a.5.5 0 0 0 0-1h-7a.5.5 0 0 0 0 1h7zm0-3a.5.5 0 0 0 0-1h-7a.5.5 0 0 0 0 1h7zm-7-3a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7z"/></svg>
+              <span class="fw-semibold">TO-DO 목록</span>
+              {% if todo_items %}
+                <span class="badge bg-white text-primary ms-auto">{{ todo_items | length }}건</span>
+              {% endif %}
+            </div>
+            <div class="card-body py-2">
+              {% if todo_items %}
+                <ol class="mb-0 ps-3">
+                  {% for item in todo_items %}
+                    <li class="py-1" style="font-size: 0.95rem;">{{ item }}</li>
+                  {% endfor %}
+                </ol>
+              {% else %}
+                <div class="text-muted small py-1">추출된 TO-DO 항목이 없습니다. (메일 재동기화 시 반영됩니다)</div>
+              {% endif %}
+            </div>
+          </div>
+
           <div class="row g-3">
             <div class="col-12 col-md-6">
               <div class="kpi-box">

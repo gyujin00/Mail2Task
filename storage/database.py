@@ -67,6 +67,16 @@ def fetch_task(task_id: str):
     return get_task_collection().find_one(_task_lookup_filter(task_id), {"_id": 0})
 
 
+def fetch_mails(query: dict | None = None, limit: int = 200) -> list:
+    """Fetch mails sorted by most recent receipt, with optional filter."""
+    return list(
+        get_mail_collection()
+        .find(query or {}, {"_id": 0})
+        .sort("received_at", DESCENDING)
+        .limit(limit)
+    )
+
+
 def fetch_mail(mail_id: str):
     """Fetch a single source mail document for the detail page."""
     return get_mail_collection().find_one({"mail_id": mail_id}, {"_id": 0})

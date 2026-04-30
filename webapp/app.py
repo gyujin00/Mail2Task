@@ -26,6 +26,7 @@ from .pipeline_service import sync_inbound
 from .repositories import (
     get_mail,
     get_task,
+    list_mails,
     list_pdfs,
     list_pdfs_by_mail,
     list_tasks,
@@ -179,6 +180,29 @@ def dashboard(request: Request):
         request,
         "dashboard.html",
         {"stats": stats},
+    )
+
+
+@app.get("/mails", response_class=HTMLResponse)
+def mails_page(
+    request: Request,
+    q: str | None = None,
+    category: str | None = None,
+    has_pdf: str | None = None,
+):
+    mails = list_mails(q=q, category=category, has_pdf=has_pdf)
+    all_mails = list_mails()
+    categories = sorted({m.get("mail_category", "") for m in all_mails if m.get("mail_category")})
+    return templates.TemplateResponse(
+        request,
+        "mails.html",
+        {
+            "mails": mails,
+            "q": q or "",
+            "category": category or "",
+            "has_pdf": has_pdf or "",
+            "categories": categories,
+        },
     )
 
 

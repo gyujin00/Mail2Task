@@ -6,6 +6,35 @@ from core.summarizer import summarize
 from storage import database
 
 
+def list_mails(
+    q: str | None = None,
+    category: str | None = None,
+    has_pdf: str | None = None,
+) -> list[dict[str, Any]]:
+    """메일 목록을 검색·필터 조건에 맞게 반환한다."""
+    mongo_query: dict = {}
+    if category:
+        mongo_query["mail_category"] = category
+    if has_pdf == "y":
+        mongo_query["has_pdf"] = True
+    elif has_pdf == "n":
+        mongo_query["has_pdf"] = {"$ne": True}
+
+    mails = database.fetch_mails(query=mongo_query, limit=200)
+
+    if q:
+        needle = q.strip().lower()
+        mails = [
+            m for m in mails
+            if needle in " ".join([
+                m.get("subject", ""),
+                m.get("sender", ""),
+                (m.get("body", "") or "")[:200],
+            ]).lower()
+        ]
+    return mails
+
+
 def list_tasks() -> list[dict[str, Any]]:
     """Return the task documents shown in the web list view."""
     return database.fetch_tasks()

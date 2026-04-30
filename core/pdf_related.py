@@ -164,6 +164,7 @@ def find_related_pdfs_for_text(
 
 
 def _extract_tokens(pdf_document: dict) -> list[str]:
+    # 1순위: MongoDB에 저장된 사전 계산 키워드 (Okt 어간 포함)
     if pdf_document.get("keywords"):
         return [
             str(token).lower()
@@ -171,17 +172,20 @@ def _extract_tokens(pdf_document: dict) -> list[str]:
             if str(token).strip()
         ][:20]
 
-    text = " ".join(
-        part
-        for part in [
-            pdf_document.get("filename", ""),
-            pdf_document.get("text", ""),
-        ]
-        if part
-    )
+    # 2순위: 메일 본문 가상 문서 등 keywords 미저장 케이스
+    # → pdf_keywords.extract_pdf_keywords() 를 통해 동일한 Okt 어근 추출 경로 사용
+    filename = pdf_document.get("filename", "")
+    text = pdf_document.get("text", "")
+    from core.pdf_keywords import extract_pdf_keywords  # noqa: PLC0415
+    keywords = extract_pdf_keywords(text, filename=filename, limit=20)
+    if keywords:
+        return keywords
+
+    # 최후 fallback: 단순 regex 토크나이징
+    combined = " ".join(part for part in [filename, text] if part)
     tokens = [
         token.lower()
-        for token in re.findall(r"[A-Za-z0-9가-힣]{2,}", text)
+        for token in re.findall(r"[A-Za-z0-9가-힣]{2,}", combined)
         if token.lower() not in STOPWORDS
     ]
     counter = Counter(tokens)
