@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% set title = "메일함" %}
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+              <div class="h6 mb-0">수신 메일 목록</div>
+              <div class="text-muted small">mails 컬렉션 기준으로 동작합니다.</div>
+            </div>
+            <div class="text-muted small">총 {{ mails | length }}건</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <form class="row g-2 align-items-end mb-3" method="get" action="/mails">
+            <div class="col-12 col-lg-4">
+              <label class="form-label small">검색</label>
+              <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="제목/발신자/본문..." />
+            </div>
+            <div class="col-6 col-lg-3">
+              <label class="form-label small">말머리</label>
+              <select class="form-select" name="category">
+                <option value="">전체</option>
+                {% for v in categories %}
+                  <option value="{{ v }}" {% if category == v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label small">PDF 첨부</label>
+              <select class="form-select" name="has_pdf">
+                <option value="">전체</option>
+                <option value="y" {% if has_pdf == "y" %}selected{% endif %}>있음</option>
+                <option value="n" {% if has_pdf == "n" %}selected{% endif %}>없음</option>
+              </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-primary" type="submit">적용</button>
+              <a class="btn btn-outline-secondary" href="/mails">초기화</a>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr class="small text-muted">
+                  <th>제목</th>
+                  <th>말머리</th>
+                  <th>발신자</th>
+                  <th>수신일</th>
+                  <th class="text-center">PDF</th>
+                  <th>연관 Task</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for m in mails %}
+                  <tr>
+                    <td class="fw-semibold">
+                      {{ m.subject or "(제목 없음)" }}
+                      {% if m.body %}
+                        <div class="text-muted small text-truncate" style="max-width:360px;">
+                          {{ m.body[:80] }}…
+                        </div>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if m.mail_category %}
+                        <span class="badge text-bg-secondary">{{ m.mail_category }}</span>
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td class="small">{{ m.sender or "-" }}</td>
+                    <td class="small text-nowrap">{{ m.received_at or "-" }}</td>
+                    <td class="text-center">
+                      {% if m.has_pdf %}
+                        <span class="badge text-bg-info">{{ m.pdf_count }}개</span>
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if m.mail_id %}
+                        <a href="/tasks?q={{ m.subject | urlencode }}" class="btn btn-outline-secondary btn-sm">
+                          Task 보기
+                        </a>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+                {% if mails | length == 0 %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-5">조건에 맞는 메일이 없습니다.</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
