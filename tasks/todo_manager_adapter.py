@@ -132,8 +132,10 @@ def classify_task_type(text):
 
 def is_actual_todo(text):
     """
-    todo_manager 원본의 의도 분류를 우선 사용한다.
-    모델/의존성이 없으면 보수적 fallback을 사용한다.
+    문장이 실행 가능한 TO-DO인지 판별한다.
+
+    1순위: todo_manager 원본 BERT 기반 의도 분류
+    2순위: todo_extractor 형태소 기반 규칙 (어간 + 어미 분류)
     """
     if not text or len(text.strip()) < 2:
         return False
@@ -145,9 +147,8 @@ def is_actual_todo(text):
         except Exception:
             pass
 
-    if _rule_filter(text) is not None:
-        return _rule_filter(text)
-    return True
+    from core.todo_extractor import _is_actionable
+    return _is_actionable(text)
 
 
 def extract_entities(text):
@@ -198,34 +199,6 @@ def _get_todo_manager_module():
     except Exception as error:  # pragma: no cover - 환경 의존 fallback
         _todo_manager_import_error = error
         return None
-
-
-def _rule_filter(text):
-    """todo_manager와 비슷한 규칙 기반 fallback."""
-    normalized_text = (text or "").strip()
-    structured_markers = [
-        "과업명:", "업무명:", "업무유형:", "마감일:", "마감기한:", "요청사항:",
-        "대상:", "우선순위:",
-    ]
-    if any(marker in normalized_text for marker in structured_markers):
-        return True
-
-    negative_patterns = ["좋다", "춥다", "덥다", "행복", "피곤", "점심", "날씨"]
-    positive_patterns = ["해야", "하자", "할 것", "부탁", "요청", "바랍니다", "확인"]
-    past_patterns = ["했습니다", "했음", "수행함", "끝냈", "완료되었습니다", "완료됐습니다", "완료됨"]
-
-    if any(pattern in text for pattern in past_patterns):
-        return False
-    if "완료" in text and not any(
-        marker in text for marker in ("완료 후", "완료시", "완료 시", "완료하면", "완료하기")
-    ):
-        if not any(pattern in text for pattern in positive_patterns):
-            return False
-    if any(pattern in text for pattern in negative_patterns):
-        return False
-    if any(pattern in text for pattern in positive_patterns):
-        return True
-    return None
 
 
 def _extract_structured_value(text, field_names):
