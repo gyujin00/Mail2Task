@@ -7,13 +7,40 @@ from datetime import datetime
 from core import config
 from storage import database
 
-try:
-    from tasks.todo_analyzer import TodoAnalyzer
-except Exception:  # pragma: no cover - 선택 의존성/모델 미설치 fallback
-    TodoAnalyzer = None
+# ── 업무 유형 분류 ─────────────────────────────────────────────────────────────
+# 업무 유형은 명사 어근(名詞 語根) 기반 분류 문제:
+# 동사 어미가 TODO 여부를 결정하는 것과 달리, 업무 도메인은 문장에 등장하는
+# 대표 명사 어근("회의", "결재", "배포")이 결정한다.
+#
+# 설계 원칙:
+#   1. 겹치는 어근은 더 좁은(특수한) 카테고리에만 배치
+#   2. 우선순위: 특수 도메인(개발·결재) → 업무 방식(회의·검토) → 산출물(보고서) →
+#               프로젝트 관리 → 반복 패턴(루틴) → 총무·행정(포괄)
+_TASK_TYPE_STEMS: dict[str, list[str]] = {
+    "개발":     ["개발", "코드", "배포", "빌드", "디버깅", "버그", "api", "서버", "장애", "패치"],
+    "결재":     ["결재", "승인", "품의", "상신", "전결", "재가"],
+    "회의":     ["회의", "미팅", "협의", "안건", "브리핑", "킥오프", "인터뷰"],
+    "검토":     ["검토", "리뷰", "피드백", "의견", "코멘트", "검수"],
+    "보고서":   ["보고서", "초안", "최종안", "발표자료", "취합"],
+    "프로젝트": ["프로젝트", "구축", "런칭", "마일스톤", "산출물", "착수", "제안서"],
+    "루틴":     ["정기", "반복", "월간", "주간", "분기", "데일리", "정례"],
+    "행정":     ["행정", "정산", "출장", "휴가", "근태", "예산", "계약", "발주", "지출"],
+}
+# 특수→일반 순 (앞에 올수록 변별력 높은 범주)
+_TASK_TYPE_ORDER = ["개발", "결재", "회의", "검토", "보고서", "프로젝트", "루틴", "행정"]
+
+_okt = None
 
 
-analyzer = TodoAnalyzer() if TodoAnalyzer is not None else None
+def _get_okt():
+    global _okt
+    if _okt is None:
+        try:
+            from konlpy.tag import Okt  # noqa: PLC0415
+            _okt = Okt()
+        except Exception:
+            _okt = False
+    return _okt if _okt is not False else None
 
 
 def save_mail(mail: dict):
@@ -161,133 +188,77 @@ def mail_exists(subject, sender, received_at):
 
 
 def classify_task_type(text: str) -> str:
+    """
+    텍스트에서 업무 유형을 분류한다.
+
+    업무 유형은 명사 어근 기반 분류 문제: 문장의 동사 어미가 TODO 여부를
+    결정하는 것과 달리, 업무 도메인은 문장에 등장하는 대표 명사 어근이 결정한다.
+
+    분류 순서:
+      1. 구조화 필드(업무유형:) → 명시값 우선
+      2. Okt 어근 추출 후 _TASK_TYPE_STEMS 교차 (특수→일반 순)
+      3. Okt 미설치: 원문 substring fallback
+    """
+    # 1. 구조화 필드 명시값 우선
     structured_match = re.search(
-        r"(?:업무유형|task\s*type)\s*[:：]?\s*([^\n\r]+)",
+        r"(?:업무유형|task\s*type)\s*[:：]\s*([^\n\r]+)",
         text,
         flags=re.IGNORECASE,
     )
     if structured_match:
-        raw_value = structured_match.group(1).strip()
-        normalized_value = raw_value.lower()
-        if "프로젝트" in raw_value or "project" in normalized_value:
-            return "프로젝트"
-        if "루틴" in raw_value or "routine" in normalized_value:
-            return "루틴"
-        if "행정" in raw_value or "admin" in normalized_value:
-            return "행정"
+        raw = structured_match.group(1).strip()
+        for label in _TASK_TYPE_ORDER:
+            if label in raw:
+                return label
 
-    if analyzer is not None:
-        try:
-            analyzed_type = analyzer.classify_task_type(text)
-            if analyzed_type and analyzed_type != "기타":
-                return analyzed_type
-        except Exception:
-            pass
+    # 2. Okt 어근 추출 후 카테고리 매칭
+    stems = _extract_content_stems(text)
+    if stems:
+        for label in _TASK_TYPE_ORDER:
+            if any(s in stems for s in _TASK_TYPE_STEMS[label]):
+                return label
+        return "기타"
 
-    keyword_rules = {
-        "보고서": [
-            "보고서", "작성", "문서", "자료", "초안", "최종안", "기안", "작성본",
-            "첨부", "정리", "취합", "제출자료", "발표자료", "공유자료",
-        ],
-        "회의": [
-            "회의", "미팅", "협의", "논의", "회의실", "안건", "회의록", "참석",
-            "참여", "일정 조율", "인터뷰", "브리핑", "킥오프",
-        ],
-        "검토": [
-            "검토", "리뷰", "확인", "피드백", "의견", "코멘트", "재검토", "점검",
-            "검수", "보완", "수정 요청", "검토 요청",
-        ],
-        "결재": [
-            "결재", "승인", "전결", "품의", "기안", "상신", "재가", "결재 요청",
-            "승인 요청", "전표", "처리 승인",
-        ],
-        "개발": [
-            "개발", "코드", "패치", "배포", "빌드", "테스트", "디버깅", "버그",
-            "수정", "개선", "기능", "API", "서버", "앱", "시스템", "장애",
-        ],
-        "프로젝트": [
-            "프로젝트", "시안", "구축", "런칭", "오픈", "고도화", "일정", "마일스톤",
-            "산출물", "범위", "과업", "착수", "제안", "제안서", "PM", "WBS",
-        ],
-        "루틴": [
-            "정기", "매일", "매주", "반복", "월간", "주간", "분기", "반기",
-            "연간", "상시", "주기", "데일리", "정례",
-        ],
-        "행정": [
-            "행정", "정산", "결산", "비품", "증빙", "보고", "운영", "관리", "신청",
-            "등록", "접수", "발급", "갱신", "공지", "안내", "협조", "요청",
-            "전달", "회신", "응답", "문의", "출장", "휴가", "근태", "비용",
-            "예산", "세금계산서", "계약", "구매", "발주", "입금", "지출",
-        ],
-    }
-    for label, keywords in keyword_rules.items():
-        if any(keyword in text for keyword in keywords):
+    # 3. fallback: Okt 미설치 환경, 원문 substring 검사
+    for label in _TASK_TYPE_ORDER:
+        if any(kw in text for kw in _TASK_TYPE_STEMS[label]):
             return label
     return "기타"
+
+
+def _extract_content_stems(text: str) -> set[str]:
+    """Okt stem=True로 명사·동사 어근 집합을 반환한다 (유형 분류용)."""
+    okt = _get_okt()
+    if okt is None:
+        return set()
+    try:
+        stems: set[str] = set()
+        for word, tag in okt.pos(text, norm=True, stem=True):
+            w = word.strip().lower()
+            if tag == "Noun" and len(w) >= 2:
+                stems.add(w)
+            elif tag in ("Verb", "Adjective"):
+                for suffix in ("하다", "되다", "이다"):
+                    if w.endswith(suffix) and len(w) > len(suffix) + 1:
+                        stems.add(w[: -len(suffix)])
+                        break
+        return stems
+    except Exception:
+        return set()
 
 
 def _analyze_task(text: str):
     if not text or len(text.strip()) < 2:
         return None
 
-    if analyzer is not None:
-        try:
-            result = analyzer.analyze(text)
-            if result:
-                return {
-                    "task_type": result.get("task_type", "기타"),
-                    "entities": _normalize_entities(result.get("entities", {})),
-                }
-        except Exception:
-            pass
-
-    if not _rule_filter(text):
+    from core.todo_extractor import _is_actionable
+    if not _is_actionable(text):
         return None
 
     return {
         "task_type": classify_task_type(text),
         "entities": _fallback_entities(text),
     }
-
-
-def _rule_filter(text: str) -> bool:
-    normalized_text = (text or "").strip()
-    structured_markers = [
-        "과업명:", "업무명:", "업무유형:", "마감일:", "마감기한:", "요청사항:",
-        "대상:", "우선순위:",
-    ]
-    if any(marker in normalized_text for marker in structured_markers):
-        return True
-
-    negative_patterns = [
-        "좋다", "춥다", "덥다", "행복", "피곤", "점심", "날씨",
-        "힘들", "재미", "지루", "슬프", "기분", "느낌", "아프",
-    ]
-    positive_patterns = [
-        "해야", "하자", "할 것", "부탁", "요청", "바랍니다", "확인",
-        "검토", "리뷰", "점검", "진행", "작성", "제출", "준비", "처리",
-        "공유", "전달", "보고", "회신", "답변", "승인", "결재", "까지",
-        "이내", "전까지", "내일", "오늘", "이번 주", "다음 주", "회의",
-    ]
-    past_patterns = [
-        "했습니다", "했음", "수행함", "끝냈", "끝남", "마쳤", "진행했", "제출했",
-        "완료되었습니다", "완료됐습니다", "완료됨",
-    ]
-
-    if any(pattern in text for pattern in past_patterns):
-        return False
-    if "완료" in text and not any(
-        marker in text for marker in ("완료 후", "완료시", "완료 시", "완료하면", "완료하기")
-    ):
-        if not any(pattern in text for pattern in positive_patterns):
-            return False
-    if text.strip().endswith("?"):
-        return False
-    if sum(1 for pattern in negative_patterns if pattern in text) >= 2:
-        return False
-    if sum(1 for pattern in positive_patterns if pattern in text) >= 1:
-        return True
-    return True
 
 
 def _fallback_entities(text: str):
